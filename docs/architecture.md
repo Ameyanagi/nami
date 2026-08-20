@@ -37,6 +37,12 @@ Its `signal` and `kernel` roles control SAME and VALID output shapes; later
 optimized kernels must preserve those shape, validation, ownership, and
 finite-result semantics.
 
+The pinned primary-source study, domain ownership decisions, proposed module
+surface, validation corpus, and dependency-ordered issue sequence live in the
+[reference architecture](reference-architecture.md). New signal-processing
+domains should reconcile their contract with that document before creating a
+module or root export.
+
 The package root exports only the small documented public surface. Algorithms,
 generated tables, platform details, and backend implementations remain in
 their owning modules. Generic Mojo-native buffers, spans, strings, and

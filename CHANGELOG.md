@@ -12,6 +12,9 @@ and uses semantic versioning after the first public release.
   or periodic sampling and formula or peak normalization.
 - Dependency-free direct `Float64` convolution with explicit FULL, SAME, and
   VALID shape, finite-data, overflow, and ownership semantics.
+- A pinned primary-source reference architecture for elementary and
+  ShuhaFFT-dependent layers, stateful processing boundaries, validation and
+  benchmark corpora, and dependency-ordered implementation issues.
 
 ### Changed
 

@@ -91,8 +91,10 @@ nonfinite sample raises. See [the convolution contract](docs/convolution.md).
 - `docs/`: architecture, design, compatibility, roadmap, and release policy
 - `conda.recipe/`: local Rattler build recipe
 
-See [the architecture](docs/architecture.md), [design principles](docs/design.md),
-and [roadmap](docs/roadmap.md) before proposing a new dependency or feature.
+See [the architecture](docs/architecture.md),
+[reference architecture](docs/reference-architecture.md),
+[design principles](docs/design.md), and [roadmap](docs/roadmap.md) before
+proposing a new dependency or feature.
 
 ## License
 
