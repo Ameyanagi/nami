@@ -61,6 +61,27 @@ than amplifying floating-point residue. Zero length returns an empty list,
 length one returns `[1.0]`, and a negative length raises. See
 [the window contract](docs/windows.md).
 
+## Direct convolution
+
+The next dependency-free slice provides correctness-first `Float64` linear
+convolution:
+
+```mojo
+from nami import ConvolutionMode, convolve
+
+var full = convolve([1.0, 2.0, 3.0], [4.0, 5.0])
+var same = convolve(
+    [1.0, 2.0, 3.0],
+    [4.0, 5.0],
+    ConvolutionMode.same(),
+)
+```
+
+FULL is the default. SAME returns the first input's length and left-centers an
+even-length kernel. VALID requires the kernel to be no longer than the first
+input. Inputs must be non-empty and finite, and arithmetic that produces a
+nonfinite sample raises. See [the convolution contract](docs/convolution.md).
+
 ## Repository map
 
 - `src/nami/`: library or application source

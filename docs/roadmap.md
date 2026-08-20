@@ -21,14 +21,14 @@ and the installed-package smoke test calls a public window function.
 
 ### Stage 2 — Dependency-free direct operations
 
-- [ ] Define nominal `FULL`, `SAME`, and `VALID` output modes, including which
+- [x] Define nominal `FULL`, `SAME`, and `VALID` output modes, including which
   input controls `SAME` length.
-- [ ] Specify empty-input and size-overflow error behavior before implementation.
-- [ ] Implement correctness-first direct `Float64` convolution.
+- [x] Specify empty-input and size-overflow error behavior before implementation.
+- [x] Implement correctness-first direct `Float64` convolution.
 - [ ] Implement correlation with an explicit lag convention.
 - [ ] Add hand-computed fixtures and invariants for commutativity, impulses,
   constants, and convolution/correlation relationships.
-- [ ] Add a small example and size-based benchmark methodology.
+- [x] Add a small example and size-based benchmark methodology.
 
 Acceptance gate: elementary tests and package precompilation remain green with
 no ShuhaFFT import in the root, windows, convolution, or correlation modules.

@@ -29,6 +29,13 @@ an explicit second operation, never an implicit correction. It rejects a
 sampled peak at or below `1e-15`, avoiding unstable amplification of a
 mathematically zero window's floating-point residue.
 
+Direct convolution treats the first input as the signal and the second as the
+kernel for shape selection. FULL convolution remains mathematically commutative,
+but SAME length and VALID admissibility do not silently exchange those roles.
+The correctness kernel rejects nonfinite inputs and nonfinite partial sums so a
+public operation that accepts finite data never silently returns infinity or
+NaN.
+
 ## Out of scope
 
 Audio devices, codecs, media pipelines, plotting, interpolation, optimization, and a second FFT implementation are outside this package.

@@ -32,6 +32,11 @@ ShuhaFFT is absent. A spectral module may import ShuhaFFT, but the root and all
 elementary modules must never import the spectral layer. This one-way boundary
 is tested before a spectral API can merge.
 
+The current direct convolution is an I/O- and FFT-independent scalar kernel.
+Its `signal` and `kernel` roles control SAME and VALID output shapes; later
+optimized kernels must preserve those shape, validation, ownership, and
+finite-result semantics.
+
 The package root exports only the small documented public surface. Algorithms,
 generated tables, platform details, and backend implementations remain in
 their owning modules. Generic Mojo-native buffers, spans, strings, and
