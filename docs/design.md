@@ -21,6 +21,14 @@ contracts and sparse dependencies. Generated tables are acceptable when their
 sources, Unicode or data version, licenses, checksums, and deterministic update
 procedure are committed. Consumers must not need the generator toolchain.
 
+Window sampling and normalization are nominal values rather than booleans so a
+call site states its mathematical intent. The default window values are direct
+evaluations of their conventional cosine formulas. In particular, an even
+symmetric window need not contain a sample equal to one. Peak normalization is
+an explicit second operation, never an implicit correction. It rejects a
+sampled peak at or below `1e-15`, avoiding unstable amplification of a
+mathematically zero window's floating-point residue.
+
 ## Out of scope
 
 Audio devices, codecs, media pipelines, plotting, interpolation, optimization, and a second FFT implementation are outside this package.

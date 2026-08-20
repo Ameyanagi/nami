@@ -14,7 +14,23 @@ install an application, renderer, language layer, or scientific stack.
 
 ## Layers
 
-Planned implementation areas: windows, convolution, correlation, resampling, spectral analysis, STFT, peak finding, smoothing, and FIR/IIR filters.
+```text
+nami root
+  └── dependency-free public exports
+      ├── windows
+      ├── direct convolution/correlation
+      └── later smoothing, peaks, and direct resampling
+
+nami.spectral (later, explicitly imported)
+  └── ShuhaFFT adapter
+      ├── spectra
+      └── STFT
+```
+
+The root package must compile and its elementary test lane must pass when
+ShuhaFFT is absent. A spectral module may import ShuhaFFT, but the root and all
+elementary modules must never import the spectral layer. This one-way boundary
+is tested before a spectral API can merge.
 
 The package root exports only the small documented public surface. Algorithms,
 generated tables, platform details, and backend implementations remain in

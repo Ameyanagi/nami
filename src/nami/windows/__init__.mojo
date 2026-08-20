@@ -1,6 +1,6 @@
-"""Scientific signal-processing algorithms for Mojo."""
+"""Dependency-free deterministic window functions."""
 
-from .windows import (
+from .general_cosine import (
     WindowNormalization,
     WindowSampling,
     blackman,

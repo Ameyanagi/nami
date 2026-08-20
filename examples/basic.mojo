@@ -1,5 +1,6 @@
-from nami._scaffold import scaffold_name
+from nami import WindowSampling, hann
 
 
-def main():
-    print(scaffold_name(), "is an experimental scaffold; no API is released yet.")
+def main() raises:
+    var analysis_window = hann(8, WindowSampling.PERIODIC)
+    print("periodic Hann window:", analysis_window)

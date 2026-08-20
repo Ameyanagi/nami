@@ -8,3 +8,5 @@ and uses semantic versioning after the first public release.
 ### Added
 
 - Initial experimental repository scaffold.
+- Dependency-free Hann, Hamming, and Blackman windows with explicit symmetric
+  or periodic sampling and formula or peak normalization.
