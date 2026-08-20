@@ -1,62 +1,33 @@
 """Dependency-free direct convolution for finite `Float64` sequences."""
 
-from std.collections import List, Optional
-
-
-def _is_finite(value: Float64) -> Bool:
-    return value == value and value - value == 0.0
+from std.collections import List
+from std.math import isfinite
 
 
 struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable):
     """Select the returned portion of a full discrete linear convolution.
 
-    Use `full()`, `same()`, or `valid()`. `same()` returns the first input's
-    length and uses the left-centered slice for an even-length kernel.
+    `SAME` returns the first input's length and uses the left-centered slice for
+    an even-length kernel. Direct mutation of `_value` is out of contract; use
+    `validate()` for an explicit checkpoint after unusual mutation.
     """
 
-    # Optional[Bool] has exactly three states, so every representable value is a
-    # valid mode: None = full, False = same, True = valid.
-    var _selection: Optional[Bool]
+    comptime FULL = ConvolutionMode(0)
+    comptime SAME = ConvolutionMode(1)
+    comptime VALID = ConvolutionMode(2)
 
-    def __init__(out self):
-        """Construct full-output mode."""
-        self._selection = None
+    var _value: Int
 
-    @staticmethod
-    def full() -> Self:
-        """Return all `signal_length + kernel_length - 1` samples."""
-        return Self()
+    def __init__(out self, _value: Int):
+        self._value = _value
 
-    @staticmethod
-    def same() -> Self:
-        """Return a centered slice whose length equals the first input."""
-        var result = Self()
-        result._selection = False
-        return result
-
-    @staticmethod
-    def valid() -> Self:
-        """Return samples where the kernel lies entirely within the signal."""
-        var result = Self()
-        result._selection = True
-        return result
-
-    def _is_same(self) -> Bool:
-        if self._selection:
-            return not self._selection.value()
-        return False
-
-    def _is_valid(self) -> Bool:
-        if self._selection:
-            return self._selection.value()
-        return False
+    def validate(self) raises:
+        """Raise if unusual direct field mutation broke the mode invariant."""
+        if self != Self.FULL and self != Self.SAME and self != Self.VALID:
+            raise Error("invalid convolution mode")
 
     def __eq__(self, other: Self) -> Bool:
-        if self._selection:
-            if other._selection:
-                return self._selection.value() == other._selection.value()
-            return False
-        return not other._selection
+        return self._value == other._value
 
 
 def _full_output_length(signal_length: Int, kernel_length: Int) raises -> Int:
@@ -72,9 +43,9 @@ def _output_length(
 ) raises -> Int:
     """Return a validated output length for internal tests and allocation."""
     var full_length = _full_output_length(signal_length, kernel_length)
-    if mode._is_same():
+    if mode == ConvolutionMode.SAME:
         return signal_length
-    if mode._is_valid():
+    if mode == ConvolutionMode.VALID:
         if kernel_length > signal_length:
             raise Error(
                 "valid convolution requires signal length at least kernel length"
@@ -84,9 +55,9 @@ def _output_length(
 
 
 def _output_start(kernel_length: Int, mode: ConvolutionMode) -> Int:
-    if mode._is_same():
+    if mode == ConvolutionMode.SAME:
         return (kernel_length - 1) // 2
-    if mode._is_valid():
+    if mode == ConvolutionMode.VALID:
         return kernel_length - 1
     return 0
 
@@ -94,7 +65,7 @@ def _output_start(kernel_length: Int, mode: ConvolutionMode) -> Int:
 def convolve(
     signal: List[Float64],
     kernel: List[Float64],
-    mode: ConvolutionMode = ConvolutionMode.full(),
+    mode: ConvolutionMode = ConvolutionMode.FULL,
 ) raises -> List[Float64]:
     """Return the direct discrete linear convolution of two finite sequences.
 
@@ -106,10 +77,10 @@ def convolve(
     """
     var output_length = _output_length(len(signal), len(kernel), mode)
     for index in range(len(signal)):
-        if not _is_finite(signal[index]):
+        if not isfinite(signal[index]):
             raise Error("convolution inputs must contain only finite values")
     for index in range(len(kernel)):
-        if not _is_finite(kernel[index]):
+        if not isfinite(kernel[index]):
             raise Error("convolution inputs must contain only finite values")
 
     var full_length = _full_output_length(len(signal), len(kernel))
@@ -120,7 +91,7 @@ def convolve(
             var updated = (
                 full[output_index] + signal[signal_index] * kernel[kernel_index]
             )
-            if not _is_finite(updated):
+            if not isfinite(updated):
                 raise Error("convolution result must contain only finite values")
             full[output_index] = updated
 

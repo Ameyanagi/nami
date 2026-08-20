@@ -1,7 +1,7 @@
-"""Hann, Hamming, and Blackman windows with explicit sampling semantics."""
+"""General cosine windows with explicit sampling and normalization semantics."""
 
 from std.collections import List
-from std.math import cos
+from std.math import cos, pi
 
 
 struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable):
@@ -9,19 +9,25 @@ struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable):
 
     `SYMMETRIC` includes both endpoints and is appropriate for filter design.
     `PERIODIC` omits the repeated endpoint and is appropriate for spectral work.
+    Direct mutation of `_value` is out of contract; use `validate()` for an
+    explicit checkpoint after unusual mutation.
     """
 
-    comptime SYMMETRIC = WindowSampling(periodic=False)
-    comptime PERIODIC = WindowSampling(periodic=True)
+    comptime SYMMETRIC = WindowSampling(0)
+    comptime PERIODIC = WindowSampling(1)
 
-    var _periodic: Bool
+    var _value: Int
 
-    def __init__(out self, *, periodic: Bool):
-        """Construct one of the two valid sampling modes."""
-        self._periodic = periodic
+    def __init__(out self, _value: Int):
+        self._value = _value
+
+    def validate(self) raises:
+        """Raise if unusual direct field mutation broke the mode invariant."""
+        if self != Self.SYMMETRIC and self != Self.PERIODIC:
+            raise Error("invalid window sampling")
 
     def __eq__(self, other: Self) -> Bool:
-        return self._periodic == other._periodic
+        return self._value == other._value
 
 
 struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable):
@@ -30,19 +36,25 @@ struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable):
     `FORMULA` evaluates the conventional coefficients directly. `PEAK` divides
     by the largest sampled absolute value. It raises when all sampled values are
     numerically zero, because such a window has no meaningful peak to scale.
+    Direct mutation of `_value` is out of contract; use `validate()` for an
+    explicit checkpoint after unusual mutation.
     """
 
-    comptime FORMULA = WindowNormalization(peak=False)
-    comptime PEAK = WindowNormalization(peak=True)
+    comptime FORMULA = WindowNormalization(0)
+    comptime PEAK = WindowNormalization(1)
 
-    var _peak: Bool
+    var _value: Int
 
-    def __init__(out self, *, peak: Bool):
-        """Construct one of the two valid normalization modes."""
-        self._peak = peak
+    def __init__(out self, _value: Int):
+        self._value = _value
+
+    def validate(self) raises:
+        """Raise if unusual direct field mutation broke the mode invariant."""
+        if self != Self.FORMULA and self != Self.PEAK:
+            raise Error("invalid window normalization")
 
     def __eq__(self, other: Self) -> Bool:
-        return self._peak == other._peak
+        return self._value == other._value
 
 
 def _normalize_peak(mut values: List[Float64]) raises:
@@ -57,14 +69,18 @@ def _normalize_peak(mut values: List[Float64]) raises:
         values[index] /= peak
 
 
-def _general_cosine(
+def general_cosine(
     length: Int,
-    a0: Float64,
-    a1: Float64,
-    a2: Float64,
-    sampling: WindowSampling,
-    normalization: WindowNormalization,
+    coefficients: Span[Float64, ...],
+    sampling: WindowSampling = WindowSampling.SYMMETRIC,
+    normalization: WindowNormalization = WindowNormalization.FORMULA,
 ) raises -> List[Float64]:
+    """Return a weighted cosine-series window using SciPy's convention.
+
+    Coefficients are centered on the origin: positive coefficients alternate
+    signs when the same formula is written over a phase interval from zero to
+    two pi. Zero length returns an empty list and length one returns `[1.0]`.
+    """
     if length < 0:
         raise Error("window length must be non-negative")
     if length == 0:
@@ -75,10 +91,13 @@ def _general_cosine(
     var denominator = length if sampling == WindowSampling.PERIODIC else length - 1
     var result = List[Float64](capacity=length)
     for index in range(length):
-        var phase = (
-            6.283185307179586476925286766559 * Float64(index) / Float64(denominator)
-        )
-        result.append(a0 - a1 * cos(phase) + a2 * cos(2.0 * phase))
+        var phase = -pi + 2.0 * pi * Float64(index) / Float64(denominator)
+        var value = 0.0
+        for coefficient_index in range(len(coefficients)):
+            value += coefficients[coefficient_index] * cos(
+                Float64(coefficient_index) * phase
+            )
+        result.append(value)
 
     if normalization == WindowNormalization.PEAK:
         _normalize_peak(result)
@@ -96,7 +115,8 @@ def hann(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default is the conventional symmetric formula.
     """
-    return _general_cosine(length, 0.5, 0.5, 0.0, sampling, normalization)
+    var coefficients: List[Float64] = [0.5, 0.5]
+    return general_cosine(length, coefficients, sampling, normalization)
 
 
 def hamming(
@@ -110,7 +130,8 @@ def hamming(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default is the conventional symmetric formula.
     """
-    return _general_cosine(length, 0.54, 0.46, 0.0, sampling, normalization)
+    var coefficients: List[Float64] = [0.54, 0.46]
+    return general_cosine(length, coefficients, sampling, normalization)
 
 
 def blackman(
@@ -124,4 +145,5 @@ def blackman(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default coefficients are 0.42, 0.5, and 0.08.
     """
-    return _general_cosine(length, 0.42, 0.5, 0.08, sampling, normalization)
+    var coefficients: List[Float64] = [0.42, 0.5, 0.08]
+    return general_cosine(length, coefficients, sampling, normalization)

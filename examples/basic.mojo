@@ -7,6 +7,6 @@ def main() raises:
     var filtered = convolve(
         [1.0, 2.0, 3.0],
         [0.25, 0.5, 0.25],
-        ConvolutionMode.same(),
+        ConvolutionMode.SAME,
     )
     print("same-length direct convolution:", filtered)

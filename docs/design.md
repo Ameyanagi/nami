@@ -22,21 +22,23 @@ sources, Unicode or data version, licenses, checksums, and deterministic update
 procedure are committed. Consumers must not need the generator toolchain.
 
 Window sampling and normalization are nominal values rather than booleans so a
-call site states its mathematical intent. The default window values are direct
-evaluations of their conventional cosine formulas. In particular, an even
-symmetric window need not contain a sample equal to one. Peak normalization is
-an explicit second operation, never an implicit correction. It rejects a
-sampled peak at or below `1e-15`, avoiding unstable amplification of a
-mathematically zero window's floating-point residue.
+call site states its mathematical intent. Like convolution modes, they are
+Int-backed structs whose named constants are the supported values. Underscore
+fields are trusted after construction; direct mutation is out of contract, and
+each type exposes `validate()` for an explicit checkpoint after unusual
+mutation. The default window values are direct evaluations of their conventional
+cosine formulas. In particular, an even symmetric window need not contain a
+sample equal to one. Peak normalization is an explicit second operation, never
+an implicit correction. It rejects a sampled peak at or below `1e-15`, avoiding
+unstable amplification of a mathematically zero window's floating-point residue.
 
 Direct convolution treats the first input as the signal and the second as the
 kernel for shape selection. FULL convolution remains mathematically commutative,
 but SAME length and VALID admissibility do not silently exchange those roles.
 The correctness kernel rejects nonfinite inputs and nonfinite partial sums so a
 public operation that accepts finite data never silently returns infinity or
-NaN. Its mode uses a three-state nominal representation rather than independent
-flags, so every value remains meaningful even though Mojo 1.0 fields are
-reachable.
+NaN. Its mode uses one Int discriminant rather than optional or parallel
+booleans, with `FULL`, `SAME`, and `VALID` as the public constants.
 
 ## Out of scope
 

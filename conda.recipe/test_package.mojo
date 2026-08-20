@@ -9,7 +9,7 @@ def main() raises:
     var filtered = convolve(
         [1.0, 2.0, 3.0],
         [1.0, 1.0],
-        ConvolutionMode.valid(),
+        ConvolutionMode.VALID,
     )
     assert_equal(len(filtered), 2)
     assert_true(abs(filtered[0] - 3.0) <= 1e-12)

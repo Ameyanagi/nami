@@ -39,13 +39,23 @@ The Mojo import is `nami`. The eventual Conda distribution is
 
 ## Window functions
 
-The first usable slice provides `Float64` Hann, Hamming, and three-term
-Blackman windows without ShuhaFFT or another runtime dependency:
+The first usable slice provides arbitrary-term `Float64` general-cosine windows
+plus Hann, Hamming, and three-term Blackman wrappers without ShuhaFFT or another
+runtime dependency:
 
 ```mojo
-from nami import WindowNormalization, WindowSampling, hann
+from nami import WindowNormalization, WindowSampling, general_cosine, hann
+from std.collections import List
 
 var analysis = hann(1024, WindowSampling.PERIODIC)
+var nuttall_coefficients: List[Float64] = [
+    0.3635819, 0.4891775, 0.1365995, 0.0106411
+]
+var nuttall = general_cosine(
+    1024,
+    nuttall_coefficients,
+    WindowSampling.PERIODIC,
+)
 var filter_design = hann(
     1024,
     WindowSampling.SYMMETRIC,
@@ -73,7 +83,7 @@ var full = convolve([1.0, 2.0, 3.0], [4.0, 5.0])
 var same = convolve(
     [1.0, 2.0, 3.0],
     [4.0, 5.0],
-    ConvolutionMode.same(),
+    ConvolutionMode.SAME,
 )
 ```
 

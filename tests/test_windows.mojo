@@ -2,6 +2,7 @@ from nami import (
     WindowNormalization,
     WindowSampling,
     blackman,
+    general_cosine,
     hamming,
     hann,
 )
@@ -32,6 +33,19 @@ def test_hamming_symmetric_reference() raises:
 
 def test_blackman_symmetric_reference() raises:
     assert_values_near(blackman(5), [0.0, 0.34, 1.0, 0.34, 0.0])
+
+
+def test_general_cosine_accepts_arbitrary_length_coefficients() raises:
+    var nuttall: List[Float64] = [0.3635819, 0.4891775, 0.1365995, 0.0106411]
+    assert_values_near(
+        general_cosine(5, nuttall),
+        [0.0003628, 0.2269824, 1.0, 0.2269824, 0.0003628],
+    )
+
+
+def test_blackman_matches_general_cosine() raises:
+    var coefficients: List[Float64] = [0.42, 0.5, 0.08]
+    assert_values_near(blackman(8), general_cosine(8, coefficients))
 
 
 def test_periodic_reference() raises:
@@ -95,11 +109,21 @@ def test_negative_length_rejected() raises:
         _ = hann(-1)
 
 
-def test_semantic_values_are_valid_by_construction() raises:
-    assert_true(WindowSampling(periodic=False) == WindowSampling.SYMMETRIC)
-    assert_true(WindowSampling(periodic=True) == WindowSampling.PERIODIC)
-    assert_true(WindowNormalization(peak=False) == WindowNormalization.FORMULA)
-    assert_true(WindowNormalization(peak=True) == WindowNormalization.PEAK)
+def test_window_mode_constants_are_distinct() raises:
+    assert_true(WindowSampling.SYMMETRIC != WindowSampling.PERIODIC)
+    assert_true(WindowNormalization.FORMULA != WindowNormalization.PEAK)
+
+
+def test_explicit_window_mode_validation_rejects_corrupted_storage() raises:
+    var sampling = WindowSampling.SYMMETRIC
+    sampling._value = 2
+    with assert_raises(contains="invalid window sampling"):
+        sampling.validate()
+
+    var normalization = WindowNormalization.FORMULA
+    normalization._value = 2
+    with assert_raises(contains="invalid window normalization"):
+        normalization.validate()
 
 
 def main() raises:
