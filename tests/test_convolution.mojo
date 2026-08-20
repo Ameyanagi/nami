@@ -44,6 +44,15 @@ def test_same_uses_left_center_for_even_kernel_of_length_four() raises:
     )
 
 
+def test_same_even_kernel_longer_than_signal_keeps_first_input_length() raises:
+    var signal: List[Float64] = [1.0, 2.0]
+    var kernel: List[Float64] = [1.0, 10.0, 100.0, 1000.0]
+    assert_values_near(
+        convolve(signal, kernel, ConvolutionMode.same()),
+        [12.0, 120.0],
+    )
+
+
 def test_first_input_controls_same_and_valid_when_inputs_are_swapped() raises:
     var longer = values3(1.0, 2.0, 3.0)
     var shorter: List[Float64] = [4.0, 5.0]
@@ -123,6 +132,10 @@ def test_nonfinite_inputs_and_results_are_rejected() raises:
 def test_output_length_overflow_is_rejected_without_allocation() raises:
     with assert_raises(contains="output length overflows Int"):
         _ = _output_length(Int.MAX, 2, ConvolutionMode.full())
+    with assert_raises(contains="output length overflows Int"):
+        _ = _output_length(Int.MAX, 2, ConvolutionMode.same())
+    with assert_raises(contains="output length overflows Int"):
+        _ = _output_length(Int.MAX, 2, ConvolutionMode.valid())
 
 
 def test_every_reachable_mode_storage_value_is_semantic() raises:
