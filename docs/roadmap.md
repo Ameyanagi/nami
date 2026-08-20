@@ -44,31 +44,53 @@ no ShuhaFFT import in the root, windows, convolution, or correlation modules.
 Acceptance gate: the root API has no placeholders and every public symbol has a
 compiled example or downstream use.
 
-### Stage 4 — Isolated spectral API
-
-This stage begins only after ShuhaFFT has a compatible tagged release and its
-planner/normalization contract is documented.
-
-- [ ] Add ShuhaFFT only to a `nami.spectral` adapter layer.
-- [ ] Define frequency-bin ordering, transform normalization, real-input output
-  length, sample-rate validation, and units before implementation.
-- [ ] Add a separate spectral CI lane with ShuhaFFT installed.
-- [ ] Keep an elementary CI lane in which ShuhaFFT is absent.
-- [ ] Implement the smallest useful real-signal spectrum operation.
-- [ ] Add sinusoid/bin reference fixtures and energy invariants.
-- [ ] Decide and document how the distribution expresses the spectral optional
-  dependency; do not ship a silently broken submodule.
-
-Acceptance gate: removing ShuhaFFT still permits importing `nami` and compiling
-every Stage 1–3 example and test. Importing `nami.spectral` is the only action
-that may require ShuhaFFT.
+The v0.1 boundary ends after Stage 3. Filters, resampling, utilities, and
+FFT-dependent work are post-v0.1 lanes rather than hidden prerequisites for the
+dependency-free core release.
 
 ## v0.2 — Usability
 
-- Add resampling, smoothing, and peak finding one contract at a time.
+The following lanes can advance independently after the v0.1 elementary
+surface freezes. Each operation still lands one complete contract at a time.
+
+### Filter lane
+
+- Add caller-visible coefficient values before stateful processors.
+- Implement FIR application and chunk state before IIR application.
+- Keep filter design, forward-backward filtering, and second-order sections in
+  later separately justified issues.
+
+### Resampling and utility lanes
+
+- Add rational polyphase resampling from caller-supplied validated FIR taps;
+  do not add filter design through a convenience parameter.
+- Add stateful resampling only after the batch alignment and flush contract is
+  stable.
+- Add one downstream-justified smoothing or peak operation at a time.
 - Add borrowed-buffer or generic numeric APIs only after downstream evidence.
-- Expand integration fixtures and publish the modular-community recipe once the
-  package is useful on its own.
+
+### ShuhaFFT-gated spectral lane
+
+This lane begins only after ShuhaFFT has a compatible tagged release and its
+planner/normalization contract is documented.
+
+- Add `src/nami_spectral/` as a separately precompiled top-level Mojo package.
+- Publish it as `mojo-nami-spectral`, depending explicitly on `mojo-nami` and
+  ShuhaFFT; do not place FFT-dependent source inside `src/nami/`.
+- Define frequency-bin ordering, transform normalization, real-input output
+  length, sample-rate validation, and units before implementation.
+- Add a spectral CI/package lane with both dependencies installed while keeping
+  the elementary `nami` lane free of ShuhaFFT.
+- Implement the smallest useful real-signal spectrum operation, then add
+  sinusoid/bin reference fixtures and energy invariants.
+
+Acceptance gate: installing only `mojo-nami` permits importing `nami` and
+compiling every elementary example and test. Installing
+`mojo-nami-spectral` adds the independent `nami_spectral` import without
+changing the core artifact.
+
+Expand integration fixtures and publish each modular-community distribution
+only after that package is independently useful.
 
 ## v0.3 — Performance
 

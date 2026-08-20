@@ -69,34 +69,45 @@ audio infrastructure is explicitly outside its scope.
 
 ## Architectural boundary
 
-Nami has two one-way layers:
+Nami has two one-way, separately compiled packages:
 
 ```text
-dependency-free elementary layer
+`nami` / `mojo-nami` dependency-free elementary package
   windows
   direct convolution and correlation
   FIR/IIR application
   polyphase rational resampling
   smoothing and peak finding
 
-explicit nami.spectral layer
-  ShuhaFFT adapter
+`nami_spectral` / `mojo-nami-spectral` companion package
+  depends on `nami` and the ShuhaFFT adapter
   spectra and periodograms
   STFT/ISTFT
   later FFT convolution and Fourier resampling
 ```
 
-Elementary modules must not import `nami.spectral` or ShuhaFFT. The root
-`nami` package exports only stable elementary symbols, so importing and
-precompiling it must work when ShuhaFFT is absent. `nami.spectral` is an
-explicit import and is the only boundary permitted to require ShuhaFFT.
+Elementary modules must not import `nami_spectral` or ShuhaFFT. The root
+`nami` package exports only stable elementary symbols, and `src/nami/` is
+precompiled by itself into the `nami` artifact. Importing, precompiling,
+testing, and packaging it must work when ShuhaFFT is absent.
+
+FFT-dependent source lives in the sibling `src/nami_spectral/` top-level Mojo
+package and is precompiled into a separate `nami_spectral` artifact. Its
+`mojo-nami-spectral` distribution depends explicitly on compatible releases of
+`mojo-nami`, `mojo-shuhafft`, and the exact Mojo compiler. It may import `nami`
+and ShuhaFFT; dependency direction never reverses. This is a second package,
+not an optional nested subpackage inside the compiled `nami` directory.
+The split is required by the pinned Mojo 1.0 compiler: precompiling a package
+directory validates its nested packages, so an unresolved ShuhaFFT import in
+`src/nami/spectral/` would fail the dependency-free core build even when the
+root `__init__.mojo` did not import it.
 
 An algorithm that can use either direct or FFT execution does not erase this
 boundary. The first implementation exposes the direct algorithm in its owning
-elementary module. A later FFT implementation lives under `nami.spectral` and
-uses an explicit method or distinct function. Automatic threshold selection is
-not added until both methods have identical public semantics, measured
-crossover data, and an elementary-only installation remains testable.
+elementary module. A later FFT implementation lives in `nami_spectral` and uses
+an explicit method or distinct function. Automatic threshold selection is not
+added until both methods have identical public semantics, measured crossover
+data, and an elementary-only installation remains testable.
 
 The intended source topology is:
 
@@ -117,15 +128,21 @@ src/nami/
     polyphase.mojo              rational FIR resampling
   smoothing/                    local/statistical smoothers, one contract each
   peaks/                        peak locations and measured properties
-  spectral/
-    __init__.mojo               explicit ShuhaFFT-dependent facade
-    _shuhafft_adapter.mojo       normalization and planning translation
-    spectrum.mojo               bins, periodogram, later Welch
-    stft.mojo                   one-shot and reusable short-time transforms
+
+src/nami_spectral/              separate Mojo package and artifact
+  __init__.mojo                 explicit spectral facade
+  _shuhafft_adapter.mojo        normalization and planning translation
+  spectrum.mojo                 bins, periodogram, later Welch
+  stft.mojo                     one-shot and reusable short-time transforms
+
+conda.recipe/recipe.yaml        builds only mojo-nami from src/nami
+conda.recipe/spectral/          later independent mojo-nami-spectral recipe
 ```
 
 Directories are created only with their first working public slice. Empty
 placeholder modules and speculative root exports are not architecture.
+`src/nami_spectral/` and its recipe therefore do not exist until
+NAMI-SPEC-001 can compile and test a real adapter slice.
 
 ## Inputs, outputs, and memory
 
@@ -189,9 +206,36 @@ Filter coefficients and processor state are different types:
 - `FIRFilter` and `IIRFilter` own coefficients plus mutable history.
 - A batch `filter_fir` or `filter_iir` convenience function creates zero
   initial state, processes one sequence, and returns a new owning output.
-- Stateful `process` consumes a chunk and advances history. `reset` returns to
-  the documented zero state. If final state must be extracted, it is returned
-  as a value rather than exposed as mutable public storage.
+- Stateful `process` reads and preserves a caller-owned chunk, returns a new
+  owning output, and advances processor history. `reset` returns to the
+  documented zero state. A documented `state_snapshot` returns an owning copy
+  for ordinary inspection and restart workflows.
+
+Mojo 1.0 does not enforce privacy for underscore-prefixed struct fields. The
+types cannot rely on coefficients, history, phase, or scratch storage staying
+behind methods. Every public observation therefore validates the complete
+reachable representation before indexing:
+
+- coefficient collections remain non-empty, finite, and valid for the chosen
+  recurrence;
+- history lengths still match the current coefficient lengths;
+- a resampler's reduced factors, phase, tap count, and history agree; and
+- a short-time transform's configuration, window, frame history, plan
+  metadata, and scratch capacity agree.
+
+Valid same-shape coefficient mutation denotes a processor with the new finite
+coefficients and existing input history. A shape change makes the current
+history invalid: `process` raises without advancing, while `reset` may recover
+by transactionally constructing correctly sized zero history after validating
+the new coefficients. Exposed state is an implementation limitation, not a
+license for unchecked indexing.
+
+Stateful operations use commit-last semantics. They validate the entire input
+chunk and current representation, compute output plus next history/phase in
+local owning values, validate the result, and only then replace processor
+state. Allocation failure, non-finite arithmetic, or any validation error
+leaves every field observably unchanged. Mutation/error tests reach the same
+fields a caller can reach and assert both rejection and state preservation.
 
 Direct-form choice, coefficient normalization, initial-condition length, and
 output behavior on arithmetic overflow are public numerical contracts. Filter
@@ -202,19 +246,31 @@ are separate later issues.
 ### Resampling
 
 The first scientific resampler is rational polyphase FIR resampling, not
-Fourier resampling. `resample_poly(signal, up, down, ...)` is a batch
-convenience API; `up` and `down` are positive, reduced by their greatest common
-divisor, and determine an exact output-length rule. Its contract specifies
-filter ownership/design, boundary extension, group-delay compensation, first
-sample alignment, and empty input.
+Fourier resampling. `resample_poly(signal, up, down, taps)` is a batch
+convenience API. `up` and `down` are positive, reduced by their greatest common
+divisor, and determine an exact output-length rule. `taps` is caller-supplied
+validated `FIRCoefficients`, borrowed read-only and preserved by the call. The
+function never designs, renormalizes, or replaces it.
 
-A later `PolyphaseResampler` owns taps, input history, and phase for chunked
-processing. Tests must prove that concatenated chunk output equals batch
-output under an explicit flush/end-of-stream policy. Arbitrary floating-rate
-conversion is not inferred from the rational API.
+The first contract interprets taps at the reduced upsampled rate and applies
+them in the provided order with no implicit gain factor. It requires an odd tap
+count, uses the middle tap index as the explicit alignment origin, uses zero
+extension outside the finite input, returns an empty output for empty input,
+and returns exactly
+`ceil(input_length * up / down)` samples after checked length arithmetic.
+Anti-aliasing and DC gain are properties of the coefficients supplied by the
+caller, not hidden design policy. Hand fixtures state the taps as well as the
+rate factors, so there is no ambient default filter.
+
+A later `PolyphaseResampler` takes ownership of an `FIRCoefficients` value at
+construction and owns taps, input history, and phase for chunked processing.
+Callers who also need the coefficient value retain an explicit copy. Tests must
+prove that concatenated chunk output equals batch output under an explicit
+flush/end-of-stream policy, including after reachable mutation and reset.
+Arbitrary floating-rate conversion is not inferred from the rational API.
 
 Fourier resampling assumes a periodic signal and requires ShuhaFFT. It belongs
-under `nami.spectral`, has a distinct name, and is never a silent fallback for
+in `nami_spectral`, has a distinct name, and is never a silent fallback for
 polyphase resampling.
 
 ### Spectra and STFT
@@ -227,7 +283,9 @@ code, not a second transform implementation.
 One-shot `spectrum`/`periodogram` and `stft` functions take explicit validated
 configuration values. A reusable `ShortTimeTransform` may later own the
 window, hop, ShuhaFFT plan, and scratch buffers. It is useful for repeated or
-chunked calls; it is not required for a single transform.
+chunked calls; it is not required for a single transform. Its public methods
+apply the same reachable-state revalidation and commit-last rule as elementary
+stateful processors.
 
 Before implementation, the contract fixes sample-rate units, frequency-bin
 ordering, one- versus two-sided output, detrending, window normalization,
@@ -274,8 +332,8 @@ Broader domains remain explicit:
 from nami.filters import FIRCoefficients, FIRFilter, filter_fir
 from nami.resampling import PolyphaseResampler, resample_poly
 from nami.peaks import Peak, find_peaks
-from nami.spectral import Spectrum, periodogram
-from nami.spectral import STFTConfig, ShortTimeTransform, stft
+from nami_spectral import Spectrum, periodogram
+from nami_spectral import STFTConfig, ShortTimeTransform, stft
 ```
 
 These are target names, not placeholders or present-day exports. Each appears
@@ -287,8 +345,9 @@ reason to re-export a type.
 
 All public numeric entry points validate their complete observable input before
 indexing or allocation. Publicly mutable collection inputs are re-read for the
-call; reusable processors validate constructor-owned coefficients and keep
-their invariants behind methods.
+call. Reusable processors cannot assume their reachable fields stayed behind
+methods: they validate structural, finite, and cross-state invariants at every
+public operation.
 
 Common rules are:
 
@@ -305,7 +364,8 @@ Common rules are:
 - keep direct algorithms deterministic and do not select another method from
   machine-dependent timing;
 - specify whether an error leaves state unchanged; the default for a stateful
-  processor is transactional validation before any state advance;
+  processor is validation and local next-state construction before a single
+  commit-last state advance;
 - distinguish mathematically invalid configuration from finite arithmetic
   overflow in error text so tests and callers can diagnose both.
 
@@ -325,8 +385,8 @@ reference source or test corpus is copied.
 | Windows | Existing coefficient fixtures; zero/singleton behavior; symmetry; periodic extension; peak normalization; invalid length and degenerate peak |
 | Convolution | Hand calculations; impulses; constants; FULL commutativity; SAME/VALID first-input roles; finite overflow; input preservation |
 | Correlation | Hand calculations with signed lags; impulse lag; autocorrelation symmetry; zero-lag dot product; relation to convolution with a reversed second input; unequal/even lengths |
-| FIR/IIR | Impulse, step, and constant signals; hand recurrence; zero initial state; batch versus chunk equivalence; reset; coefficient and state-length errors; overflow without partial state advance |
-| Resampling | Identity ratio; GCD-equivalent ratios; constant/DC preservation; impulse alignment; known sinusoid below cutoff; output length and delay; batch versus irregular chunks plus flush; invalid factors |
+| FIR/IIR | Impulse, step, and constant signals; hand recurrence; zero initial state; batch versus chunk equivalence; reset and owning snapshots; reachable coefficient/history mutation; coefficient and state-length errors; overflow without partial state advance |
+| Resampling | Explicit caller-supplied tap tables; identity ratio; GCD-equivalent ratios; impulse alignment; known sinusoid below cutoff with separately justified anti-alias taps; exact output length; no implicit gain/design; batch versus irregular chunks plus flush; invalid factors and reachable state mutation |
 | Spectrum | Exact-bin sine and DC; bin frequencies; one-/two-sided lengths; amplitude/power scaling; Parseval relation within a declared tolerance |
 | STFT/ISTFT | Frame count and centering; exact-bin frames; one-shot versus reusable plan; COLA/NOLA edge cases; round trip under supported configurations; irregular chunks and final flush |
 | Peaks/smoothing | Plateaus, endpoints, ties, minimum distance, prominence/width definitions; constant and impulse smoothing; boundary behavior; input preservation |
@@ -365,19 +425,37 @@ not an API guarantee and cannot weaken the explicit dependency boundary.
 | Package surface | Focused domain modules and a small stable root | SciPy-sized flat facade or speculative re-exports |
 | Data model | Mojo-native finite one-dimensional collections | A Nami array, audio `Frame`, channel graph, or N-D `axis` surface |
 | Execution | Explicit direct elementary and explicit FFT spectral algorithms | Silent `auto` method selection before semantic parity and benchmarks |
-| State | Pure batch functions plus stateful processors where chunks require history/phase | Hidden global caches or mutation inside nominally pure calls |
+| State | Pure batch functions plus operation-time-validated, commit-last processors where chunks require history/phase | Hidden global caches, privacy assumptions, unchecked reachable state, or mutation inside nominally pure calls |
 | Filters | Separate coefficients, state, application, and later design | Shipping a broad filter-design catalogue before application contracts |
-| Resampling | Rational polyphase FIR first; distinct Fourier resampling later | One ambiguous `resample` whose assumptions change by input size |
-| FFT ownership | A narrow ShuhaFFT adapter in `nami.spectral` | Bundled FFT implementation or ShuhaFFT imported from root modules |
+| Resampling | Rational polyphase FIR with borrowed caller-supplied taps first; distinct Fourier resampling later | Hidden filter design or one ambiguous `resample` whose assumptions change by input size |
+| FFT ownership | A narrow ShuhaFFT adapter in the separately compiled `nami_spectral` package | Bundled FFT implementation, an optional nested package, or ShuhaFFT imported from `src/nami/` |
 | Optimization | Preserve a scalar normative path and optimize measured kernels | Benchmark-driven semantic changes or unsupported speed claims |
 
-## Issue order
+## Issue lanes and order
 
-Issues are dependency-ordered and sized to merge with their complete contract.
-An issue cannot add a public placeholder for a later issue.
+Issues are sized to merge with their complete contract. An issue cannot add a
+public placeholder for a later issue. Only the v0.1 core is one serial release
+sequence; after it freezes, the filter, resampling, utility, and externally
+gated spectral lanes are independent:
+
+```text
+NAMI-REF-001
+      ↓
+NAMI-CORE-003
+      ↓
+NAMI-CORE-004  ← v0.1 ends
+   ├── NAMI-FILT-001 → NAMI-FILT-002
+   ├── NAMI-RSMP-001 → NAMI-RSMP-002
+   ├── NAMI-UTIL-001
+   └── NAMI-SPEC-001 → 002 → 003 → 004 → NAMI-PERF-001
+           ↑
+     compatible tagged ShuhaFFT
+```
+
+### v0.1 core sequence
 
 1. **NAMI-REF-001 — Reference architecture.** Land this research record,
-   dependency matrix, API ownership, validation corpus, and issue sequence.
+   package boundaries, API ownership, validation corpus, and issue lanes.
 2. **NAMI-CORE-003 — Direct correlation.** Define signed lags and unequal/even
    shape rules; migrate the unreleased shape type to total `OutputMode`;
    implement direct `correlate` plus `correlation_lags`; add hand fixtures,
@@ -386,38 +464,60 @@ An issue cannot add a public placeholder for a later issue.
 3. **NAMI-CORE-004 — Elementary v0.1 freeze.** Exercise windows/convolution/
    correlation from an independent installed consumer; record allocation and
    tolerance contracts; decide borrowed-buffer overloads from evidence; freeze
-   root exports.
-4. **NAMI-FILT-001 — FIR coefficients and application.** Add validated
-   coefficients, zero-state batch filtering, stateful chunk processor, reset,
-   transactional errors, and batch/chunk equivalence. No design API.
-5. **NAMI-FILT-002 — IIR application.** Choose and document the recurrence;
-   add coefficient normalization, initial/final state, batch and stateful
-   processing, extreme-value tests, and no stability claim. Defer SOS/design.
-6. **NAMI-RSMP-001 — Rational polyphase contract and batch slice.** Specify
-   length, alignment, delay, boundary, taps, and GCD reduction; implement the
-   smallest fixed-contract `resample_poly` with reference and anti-alias tests.
-7. **NAMI-RSMP-002 — Stateful polyphase processor.** Add chunk history/phase,
-   flush behavior, reset, and arbitrary-chunk equivalence without changing the
-   batch result.
-8. **NAMI-UTIL-001 — One peak or smoothing slice.** Select one downstream-
-   justified operation, define boundary/tie semantics, and land it end to end;
-   do not create both broad namespaces at once.
-9. **NAMI-SPEC-001 — ShuhaFFT adapter contract.** Begins only after a
-   compatible tagged ShuhaFFT release. Pin the dependency, translate plan and
-   normalization semantics, add separate spectral CI/package smoke, and prove
-   the elementary lane without ShuhaFFT.
-10. **NAMI-SPEC-002 — Real-signal periodogram.** Define bins, units,
-    one-sided scaling, windowing, and sample-rate validation; add exact-bin and
-    energy fixtures.
-11. **NAMI-SPEC-003 — One-shot STFT/ISTFT.** Define configuration, frames,
-    centering, padding, overlap-add conditions, output ownership, and round-trip
-    tolerances before implementation.
-12. **NAMI-SPEC-004 — Reusable short-time transform.** Own plan and scratch
-    buffers, add repeated/chunked execution and flush, and prove parity with the
-    one-shot API.
-13. **NAMI-PERF-001 — Explicit FFT convolution.** Add it under the spectral
-    boundary only after semantic parity with direct convolution. Consider an
-    automatic chooser in a separate issue after reproducible crossover data.
+   root exports. This closes v0.1.
+
+### Post-v0.1 filter lane
+
+- **NAMI-FILT-001 — FIR coefficients and application.** Add validated
+  coefficients, zero-state batch filtering, stateful chunk processor, reset,
+  state snapshots, operation-time reachable-state validation, commit-last
+  errors, mutation tests, and batch/chunk equivalence. No design API.
+- **NAMI-FILT-002 — IIR application.** Depends on NAMI-FILT-001's ownership and
+  transaction contracts. Choose and document the recurrence; add coefficient
+  normalization, initial/final state, batch and stateful processing,
+  cross-state mutation and extreme-value tests, and no stability claim. Defer
+  SOS and design.
+
+### Post-v0.1 resampling lane
+
+- **NAMI-RSMP-001 — Caller-filtered rational polyphase batch slice.** Accept
+  borrowed validated `FIRCoefficients`; specify reduced-rate tap meaning, no
+  implicit design/gain, checked ceiling length, middle-tap alignment, boundary
+  extension, and GCD reduction; implement `resample_poly` with hand and
+  separately justified anti-alias fixtures.
+- **NAMI-RSMP-002 — Stateful polyphase processor.** Depends on NAMI-RSMP-001.
+  Take ownership of coefficients; add chunk history/phase, cross-state
+  validation, commit-last processing, flush behavior, reset, snapshots,
+  mutation tests, and arbitrary-chunk equivalence without changing the batch
+  result.
+
+### Post-v0.1 utility lane
+
+- **NAMI-UTIL-001 — One peak or smoothing slice.** Select one downstream-
+  justified operation, define boundary/tie semantics, and land it end to end;
+  do not create both broad namespaces at once.
+
+### ShuhaFFT-gated spectral companion lane
+
+- **NAMI-SPEC-001 — Separate package and adapter contract.** Begins only after
+  a compatible tagged ShuhaFFT release. Create working `src/nami_spectral/`
+  source, precompile it separately, and package it as
+  `mojo-nami-spectral` with explicit `mojo-nami` and `mojo-shuhafft`
+  dependencies. Translate plan and normalization semantics; add a dependency-
+  free core CI/package lane and a separately installed spectral CI/package
+  smoke. Do not add `src/nami/spectral/`.
+- **NAMI-SPEC-002 — Real-signal periodogram.** Depends on NAMI-SPEC-001. Define
+  bins, units, one-sided scaling, windowing, and sample-rate validation; add
+  exact-bin and energy fixtures.
+- **NAMI-SPEC-003 — One-shot STFT/ISTFT.** Define configuration, frames,
+  centering, padding, overlap-add conditions, output ownership, and round-trip
+  tolerances before implementation.
+- **NAMI-SPEC-004 — Reusable short-time transform.** Own plan and scratch
+  buffers; add operation-time cross-state validation, commit-last repeated/
+  chunked execution and flush, mutation tests, and parity with the one-shot API.
+- **NAMI-PERF-001 — Explicit FFT convolution.** Add it only to
+  `nami_spectral` after semantic parity with direct convolution. Consider an
+  automatic chooser in a separate issue after reproducible crossover data.
 
 ## Non-goals
 

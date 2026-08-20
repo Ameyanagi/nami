@@ -10,10 +10,11 @@ Nami provides scientific signal-processing algorithms and delegates Fourier tran
 
 The v0.1 work is deliberately staged: dependency-free windows first, direct
 convolution and correlation second, and stabilization of that elementary API
-third. A small spectral API begins only after those stages and a compatible
-ShuhaFFT release; its FFT-dependent imports remain isolated to spectral modules.
-The project is independently installable and does not require any application
-from the wider ecosystem.
+third. After v0.1, a small spectral companion begins only after a compatible
+ShuhaFFT release. It is built as the separate `nami_spectral` Mojo package and
+`mojo-nami-spectral` distribution, so FFT-dependent source never enters the
+dependency-free `nami` artifact. The project is independently installable and
+does not require any application from the wider ecosystem.
 
 ## Development
 
@@ -36,6 +37,12 @@ documented.
 The Mojo import is `nami`. The eventual Conda distribution is
 `mojo-nami`. Source lives under `src/nami/`, whose
 `__init__.mojo` defines the package boundary.
+
+The future FFT-dependent companion uses the import `nami_spectral`, the
+distribution `mojo-nami-spectral`, and the sibling source root
+`src/nami_spectral/`. It depends explicitly on `mojo-nami` and ShuhaFFT and is
+compiled and tested separately. Installing or importing `nami` never requires
+that companion.
 
 ## Window functions
 
@@ -85,6 +92,8 @@ nonfinite sample raises. See [the convolution contract](docs/convolution.md).
 ## Repository map
 
 - `src/nami/`: library or application source
+- `src/nami_spectral/`: future separately packaged ShuhaFFT adapter and
+  spectral algorithms; absent until its first working slice
 - `tests/`: TestSuite unit, reference-value, and invariant tests
 - `examples/`: small compilable usage programs
 - `benchmarks/`: reproducible methodology and later benchmark programs

@@ -4,7 +4,9 @@ Nami owns Windows, convolution, correlation, resampling, spectral analysis, STFT
 
 ## Dependency boundary
 
-Allowed ecosystem dependencies: ShuhaFFT only for algorithms that require transforms; elementary operations remain independently usable.
+The `nami` package and `mojo-nami` distribution use only the Mojo standard
+library. The separately compiled future `nami_spectral` package and
+`mojo-nami-spectral` distribution may depend on both `mojo-nami` and ShuhaFFT.
 Expected downstream consumers: Scientific analysis programs and domain-specific signal-processing packages.
 
 Dependencies point from applications and higher-level packages toward smaller
@@ -21,16 +23,24 @@ nami root
       ├── direct convolution/correlation
       └── later smoothing, peaks, and direct resampling
 
-nami.spectral (later, explicitly imported)
-  └── ShuhaFFT adapter
+nami_spectral companion (later, separately installed and imported)
+  └── depends on nami + ShuhaFFT adapter
       ├── spectra
       └── STFT
 ```
 
-The root package must compile and its elementary test lane must pass when
-ShuhaFFT is absent. A spectral module may import ShuhaFFT, but the root and all
-elementary modules must never import the spectral layer. This one-way boundary
-is tested before a spectral API can merge.
+`src/nami/` must compile and its elementary test/package lane must pass when
+ShuhaFFT is absent. FFT-dependent source lives in the sibling
+`src/nami_spectral/` package, which is precompiled into a different artifact
+and installed by a different distribution. It may import `nami` and ShuhaFFT;
+`nami` must never import `nami_spectral`. Both the absent-companion elementary
+lane and the installed-companion spectral lane are required before a spectral
+API can merge.
+
+This source-root split is an enforceable Mojo 1.0 boundary. A nested package is
+validated when its parent package directory is precompiled, so an unresolved
+dependency inside `src/nami/spectral/` would break the supposedly independent
+core build even without a root re-export.
 
 The current direct convolution is an I/O- and FFT-independent scalar kernel.
 Its `signal` and `kernel` roles control SAME and VALID output shapes; later
