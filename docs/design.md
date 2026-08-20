@@ -34,7 +34,9 @@ kernel for shape selection. FULL convolution remains mathematically commutative,
 but SAME length and VALID admissibility do not silently exchange those roles.
 The correctness kernel rejects nonfinite inputs and nonfinite partial sums so a
 public operation that accepts finite data never silently returns infinity or
-NaN.
+NaN. Its mode uses a three-state nominal representation rather than independent
+flags, so every value remains meaningful even though Mojo 1.0 fields are
+reachable.
 
 ## Out of scope
 

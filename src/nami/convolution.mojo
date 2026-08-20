@@ -1,6 +1,6 @@
 """Dependency-free direct convolution for finite `Float64` sequences."""
 
-from std.collections import List
+from std.collections import List, Optional
 
 
 def _is_finite(value: Float64) -> Bool:
@@ -14,13 +14,13 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable):
     length and uses the left-centered slice for an even-length kernel.
     """
 
-    var _is_same: Bool
-    var _is_valid: Bool
+    # Optional[Bool] has exactly three states, so every representable value is a
+    # valid mode: None = full, False = same, True = valid.
+    var _selection: Optional[Bool]
 
     def __init__(out self):
         """Construct full-output mode."""
-        self._is_same = False
-        self._is_valid = False
+        self._selection = None
 
     @staticmethod
     def full() -> Self:
@@ -31,24 +31,32 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable):
     def same() -> Self:
         """Return a centered slice whose length equals the first input."""
         var result = Self()
-        result._is_same = True
+        result._selection = False
         return result
 
     @staticmethod
     def valid() -> Self:
         """Return samples where the kernel lies entirely within the signal."""
         var result = Self()
-        result._is_valid = True
+        result._selection = True
         return result
 
-    def _validate(self) raises:
-        # Mojo 1.0 fields remain externally mutable. The fourth Bool pair has no
-        # convolution meaning, so every semantic operation rejects it.
-        if self._is_same and self._is_valid:
-            raise Error("invalid convolution mode")
+    def _is_same(self) -> Bool:
+        if self._selection:
+            return not self._selection.value()
+        return False
+
+    def _is_valid(self) -> Bool:
+        if self._selection:
+            return self._selection.value()
+        return False
 
     def __eq__(self, other: Self) -> Bool:
-        return self._is_same == other._is_same and self._is_valid == other._is_valid
+        if self._selection:
+            if other._selection:
+                return self._selection.value() == other._selection.value()
+            return False
+        return not other._selection
 
 
 def _full_output_length(signal_length: Int, kernel_length: Int) raises -> Int:
@@ -63,11 +71,10 @@ def _output_length(
     signal_length: Int, kernel_length: Int, mode: ConvolutionMode
 ) raises -> Int:
     """Return a validated output length for internal tests and allocation."""
-    mode._validate()
     var full_length = _full_output_length(signal_length, kernel_length)
-    if mode._is_same:
+    if mode._is_same():
         return signal_length
-    if mode._is_valid:
+    if mode._is_valid():
         if kernel_length > signal_length:
             raise Error(
                 "valid convolution requires signal length at least kernel length"
@@ -77,9 +84,9 @@ def _output_length(
 
 
 def _output_start(kernel_length: Int, mode: ConvolutionMode) -> Int:
-    if mode._is_same:
+    if mode._is_same():
         return (kernel_length - 1) // 2
-    if mode._is_valid:
+    if mode._is_valid():
         return kernel_length - 1
     return 0
 

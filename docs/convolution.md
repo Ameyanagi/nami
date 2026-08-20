@@ -24,7 +24,8 @@ and the second as the kernel rather than silently swapping their roles.
 - Every accumulated output must remain finite; multiplication or accumulation
   overflow raises instead of returning infinity or NaN.
 - `N + M - 1` must fit in `Int`, including for sliced modes.
-- The mode is revalidated before use because its Mojo 1.0 storage is reachable.
+- The reachable mode storage has exactly three states, and every state denotes
+  one of `FULL`, `SAME`, or `VALID`.
 - The inputs are preserved and a new owning `List[Float64]` is returned.
 
 The initial implementation materializes the full result before selecting SAME

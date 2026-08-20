@@ -35,6 +35,34 @@ def test_reference_values_for_all_output_modes() raises:
     )
 
 
+def test_same_uses_left_center_for_even_kernel_of_length_four() raises:
+    var signal: List[Float64] = [1.0, 2.0, 3.0, 4.0, 5.0]
+    var kernel: List[Float64] = [1.0, 10.0, 100.0, 1000.0]
+    assert_values_near(
+        convolve(signal, kernel, ConvolutionMode.same()),
+        [12.0, 123.0, 1234.0, 2345.0, 3450.0],
+    )
+
+
+def test_first_input_controls_same_and_valid_when_inputs_are_swapped() raises:
+    var longer = values3(1.0, 2.0, 3.0)
+    var shorter: List[Float64] = [4.0, 5.0]
+    assert_values_near(
+        convolve(longer, shorter, ConvolutionMode.same()),
+        [4.0, 13.0, 22.0],
+    )
+    assert_values_near(
+        convolve(shorter, longer, ConvolutionMode.same()),
+        [13.0, 22.0],
+    )
+    assert_values_near(
+        convolve(longer, shorter, ConvolutionMode.valid()),
+        [13.0, 22.0],
+    )
+    with assert_raises(contains="signal length at least kernel length"):
+        _ = convolve(shorter, longer, ConvolutionMode.valid())
+
+
 def test_full_convolution_is_commutative() raises:
     var signal = values3(-1.0, 2.5, 4.0)
     var kernel: List[Float64] = [0.5, -3.0]
@@ -97,12 +125,21 @@ def test_output_length_overflow_is_rejected_without_allocation() raises:
         _ = _output_length(Int.MAX, 2, ConvolutionMode.full())
 
 
-def test_mutated_invalid_mode_is_rejected() raises:
-    var mode = ConvolutionMode.same()
-    mode._is_valid = True
-    var value: List[Float64] = [1.0]
-    with assert_raises(contains="invalid convolution mode"):
-        _ = convolve(value, value, mode)
+def test_every_reachable_mode_storage_value_is_semantic() raises:
+    var mode = ConvolutionMode.full()
+    var signal = values3(1.0, 2.0, 3.0)
+    var kernel: List[Float64] = [4.0, 5.0]
+    mode._selection = None
+    assert_true(mode == ConvolutionMode.full())
+    assert_values_near(convolve(signal, kernel, mode), [4.0, 13.0, 22.0, 15.0])
+
+    mode._selection = False
+    assert_true(mode == ConvolutionMode.same())
+    assert_values_near(convolve(signal, kernel, mode), [4.0, 13.0, 22.0])
+
+    mode._selection = True
+    assert_true(mode == ConvolutionMode.valid())
+    assert_values_near(convolve(signal, kernel, mode), [13.0, 22.0])
 
 
 def test_mode_factories_are_distinct() raises:

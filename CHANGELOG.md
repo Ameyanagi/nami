@@ -12,3 +12,8 @@ and uses semantic versioning after the first public release.
   or periodic sampling and formula or peak normalization.
 - Dependency-free direct `Float64` convolution with explicit FULL, SAME, and
   VALID shape, finite-data, overflow, and ownership semantics.
+
+### Changed
+
+- Made every reachable `ConvolutionMode` storage state denote exactly one of
+  FULL, SAME, or VALID.
