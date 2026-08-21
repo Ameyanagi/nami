@@ -11,15 +11,18 @@ source:
 build:
   number: 0
   script:
-    - mojo precompile src/nami -o ${{ PREFIX }}/lib/mojo/nami.mojoc
+    - mojo precompile -I ${{ PREFIX }}/lib/mojo src/nami -o ${{ PREFIX }}/lib/mojo/nami.mojoc
 
 requirements:
   build:
     - mojo-compiler =1.0.0
+    - mojo-shuhafft
   host:
     - mojo-compiler =1.0.0
+    - mojo-shuhafft
   run:
     - ${{ pin_compatible('mojo-compiler') }}
+    - mojo-shuhafft
 
 tests:
   - script:
