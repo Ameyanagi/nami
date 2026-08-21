@@ -25,6 +25,7 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
       linux-64:
+      - conda: https://ameyanagi.github.io/mojo-channel/linux-64/mojo-shuhafft-0.0.0-hb0f4dca_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_10.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/icu-78.3-py310h44b86e0_2.conda
@@ -78,6 +79,7 @@ environments:
       - conda: https://conda.modular.com/max/noarch/mblack-26.5.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mojo-python-1.0.0-release.conda
       linux-aarch64:
+      - conda: https://ameyanagi.github.io/mojo-channel/linux-aarch64/mojo-shuhafft-0.0.0-he8cfe8b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/bzip2-1.0.8-h4777abc_10.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/icu-78.3-py311h3512406_2.conda
@@ -178,6 +180,22 @@ environments:
       - conda: https://conda.modular.com/max/osx-arm64/mojo-1.0.0-release.conda
       - conda: https://conda.modular.com/max/osx-arm64/mojo-compiler-1.0.0-release.conda
 packages:
+- conda: https://ameyanagi.github.io/mojo-channel/linux-64/mojo-shuhafft-0.0.0-hb0f4dca_0.conda
+  sha256: 143dd61852260468722d53dd51f6d8511beb71ee70c13f45b04e6559dabb46a1
+  md5: ed3505e5e1e061528afc06eb62cb930e
+  depends:
+  - mojo-compiler >=1.0.0,<2.0a0
+  license: MIT OR Apache-2.0
+  size: 94906
+  timestamp: 1787303691797
+- conda: https://ameyanagi.github.io/mojo-channel/linux-aarch64/mojo-shuhafft-0.0.0-he8cfe8b_0.conda
+  sha256: 17999e0efe53eaacefaf1b71a8a3bc72a3533bb13e9d250efd68b97ebdbbf3a2
+  md5: 29d4c958dbfe5fc9a69be49ec534e362
+  depends:
+  - mojo-compiler >=1.0.0,<2.0a0
+  license: MIT OR Apache-2.0
+  size: 94892
+  timestamp: 1787303692509
 - conda: https://ameyanagi.github.io/mojo-channel/osx-arm64/mojo-shuhafft-0.0.0-h60d57d3_0.conda
   sha256: 84f3868eeb001bc39a55b2c802ae6b2415e33bba44f51ebf214822bbc2cb3f1a
   md5: ad2e6eff7af4d25e0b6294d4f57f170f

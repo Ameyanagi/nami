@@ -19,11 +19,10 @@ precompile = { cmd = "mojo precompile --Werror --warn-on-unstable-apis src/nami 
 test = { cmd = "bash scripts/test.sh", description = "Run all Mojo TestSuite files" }
 
 [dependencies]
+mojo-shuhafft = "*"
 mojo = "==1.0.0"
 rattler-build = ">=0.74,<0.75"
 
 # The spectral layer consumes ShuhaFFT as a conda package from the local
 # channel above. The locally built package currently exists for osx-arm64
 # only; Linux lanes gain the dependency once a published channel carries it.
-[target.osx-arm64.dependencies]
-mojo-shuhafft = "*"
