@@ -1,6 +1,10 @@
 [workspace]
 authors = ["Ameyanagi <contact@ameyanagi.com>"]
-channels = ["https://conda.modular.com/max", "conda-forge"]
+channels = [
+    "file:///Users/ryuichi/dev/shuhafft/output",
+    "https://conda.modular.com/max",
+    "conda-forge",
+]
 name = "nami"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.0.0"
@@ -17,3 +21,9 @@ test = { cmd = "bash scripts/test.sh", description = "Run all Mojo TestSuite fil
 [dependencies]
 mojo = "==1.0.0"
 rattler-build = ">=0.74,<0.75"
+
+# The spectral layer consumes ShuhaFFT as a conda package from the local
+# channel above. The locally built package currently exists for osx-arm64
+# only; Linux lanes gain the dependency once a published channel carries it.
+[target.osx-arm64.dependencies]
+mojo-shuhafft = "*"
