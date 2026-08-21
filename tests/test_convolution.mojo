@@ -68,7 +68,12 @@ def test_first_input_controls_same_and_valid_when_inputs_are_swapped() raises:
         convolve(longer, shorter, ConvolutionMode.VALID),
         [13.0, 22.0],
     )
-    with assert_raises(contains="signal length at least kernel length"):
+    with assert_raises(
+        contains=(
+            "valid convolution requires kernel length <= signal length; got "
+            "kernel=3, signal=2"
+        )
+    ):
         _ = convolve(shorter, longer, ConvolutionMode.VALID)
 
 
@@ -113,7 +118,12 @@ def test_empty_inputs_are_rejected() raises:
 def test_valid_mode_rejects_kernel_longer_than_signal() raises:
     var signal: List[Float64] = [1.0, 2.0]
     var kernel = values3(1.0, 1.0, 1.0)
-    with assert_raises(contains="signal length at least kernel length"):
+    with assert_raises(
+        contains=(
+            "valid convolution requires kernel length <= signal length; got "
+            "kernel=3, signal=2"
+        )
+    ):
         _ = convolve(signal, kernel, ConvolutionMode.VALID)
 
 
@@ -149,6 +159,12 @@ def test_mode_constants_are_distinct() raises:
     assert_true(ConvolutionMode.FULL != ConvolutionMode.SAME)
     assert_true(ConvolutionMode.FULL != ConvolutionMode.VALID)
     assert_true(ConvolutionMode.SAME != ConvolutionMode.VALID)
+
+
+def test_mode_writes_constant_names() raises:
+    assert_equal(String(ConvolutionMode.FULL), "FULL")
+    assert_equal(String(ConvolutionMode.SAME), "SAME")
+    assert_equal(String(ConvolutionMode.VALID), "VALID")
 
 
 def main() raises:

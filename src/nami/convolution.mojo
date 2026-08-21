@@ -1,10 +1,11 @@
-"""Dependency-free direct convolution for finite `Float64` sequences."""
+"""Dependency-free direct convolution and correlation for `Float64` sequences."""
 
 from std.collections import List
+from std.io import Writable, Writer
 from std.math import isfinite
 
 
-struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable):
+struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable, Writable):
     """Select the returned portion of a full discrete linear convolution.
 
     `SAME` returns the first input's length and uses the left-centered slice for
@@ -29,6 +30,19 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable):
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
 
+    def __str__(self) -> String:
+        var result = String()
+        self.write_to(result)
+        return result^
+
+    def write_to[W: Writer](self, mut writer: W):
+        if self == Self.FULL:
+            writer.write("FULL")
+        elif self == Self.SAME:
+            writer.write("SAME")
+        else:
+            writer.write("VALID")
+
 
 def _full_output_length(signal_length: Int, kernel_length: Int) raises -> Int:
     if signal_length <= 0 or kernel_length <= 0:
@@ -48,7 +62,15 @@ def _output_length(
     if mode == ConvolutionMode.VALID:
         if kernel_length > signal_length:
             raise Error(
-                "valid convolution requires signal length at least kernel length"
+                String(
+                    (
+                        "valid convolution requires kernel length <= signal length; got"
+                        " kernel="
+                    ),
+                    kernel_length,
+                    ", signal=",
+                    signal_length,
+                )
             )
         return signal_length - kernel_length + 1
     return full_length
@@ -62,19 +84,12 @@ def _output_start(kernel_length: Int, mode: ConvolutionMode) -> Int:
     return 0
 
 
-def convolve(
-    signal: List[Float64],
-    kernel: List[Float64],
-    mode: ConvolutionMode = ConvolutionMode.FULL,
+def _convolve_core(
+    signal: Span[Float64, _],
+    kernel: Span[Float64, _],
+    mode: ConvolutionMode,
 ) raises -> List[Float64]:
-    """Return the direct discrete linear convolution of two finite sequences.
-
-    Both inputs must be non-empty and contain only finite values. `SAME` length
-    is controlled by `signal`, the first input; for an even kernel it starts at
-    `floor((kernel_length - 1) / 2)` in the full result. `VALID` requires the
-    kernel to be no longer than the signal. Arithmetic overflow raises instead
-    of returning a non-finite sample. Inputs are preserved.
-    """
+    """Run validated direct convolution for the public entry points."""
     var output_length = _output_length(len(signal), len(kernel), mode)
     for index in range(len(signal)):
         if not isfinite(signal[index]):
@@ -102,3 +117,41 @@ def convolve(
     for index in range(output_length):
         output.append(full[start + index])
     return output^
+
+
+def convolve(
+    signal: Span[Float64, _],
+    kernel: Span[Float64, _],
+    mode: ConvolutionMode = ConvolutionMode.FULL,
+) raises -> List[Float64]:
+    """Return the direct discrete linear convolution of two finite sequences.
+
+    Both inputs must be non-empty and contain only finite values. `SAME` length
+    is controlled by `signal`, the first input; for an even kernel it starts at
+    `floor((kernel_length - 1) / 2)` in the full result. `VALID` requires the
+    kernel to be no longer than the signal. Arithmetic overflow raises instead
+    of returning a non-finite sample. Inputs are preserved.
+    """
+    return _convolve_core(signal, kernel, mode)
+
+
+def correlate(
+    signal: Span[Float64, _],
+    kernel: Span[Float64, _],
+    mode: ConvolutionMode = ConvolutionMode.FULL,
+) raises -> List[Float64]:
+    """Return direct cross-correlation without complex conjugation.
+
+    For every mode, `correlate(a, b, mode)` equals
+    `convolve(a, reversed(b), mode)`. In the `FULL` output, index `m`
+    corresponds to lag `m - (len(kernel) - 1)`, and the value at lag `k` is
+    `sum_n signal[n + k] * kernel[n]`; zero lag is therefore at index
+    `len(kernel) - 1`. Output mode and validation behavior match `convolve`:
+    inputs must be non-empty and finite, `VALID` requires the kernel to be no
+    longer than the signal, and output-length or arithmetic overflow raises.
+    Inputs are preserved.
+    """
+    var reversed_kernel = List[Float64](capacity=len(kernel))
+    for index in range(len(kernel)):
+        reversed_kernel.append(kernel[len(kernel) - index - 1])
+    return _convolve_core(signal, reversed_kernel, mode)

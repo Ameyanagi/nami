@@ -114,6 +114,13 @@ def test_window_mode_constants_are_distinct() raises:
     assert_true(WindowNormalization.FORMULA != WindowNormalization.PEAK)
 
 
+def test_window_modes_write_constant_names() raises:
+    assert_equal(String(WindowSampling.SYMMETRIC), "SYMMETRIC")
+    assert_equal(String(WindowSampling.PERIODIC), "PERIODIC")
+    assert_equal(String(WindowNormalization.FORMULA), "FORMULA")
+    assert_equal(String(WindowNormalization.PEAK), "PEAK")
+
+
 def test_explicit_window_mode_validation_rejects_corrupted_storage() raises:
     var sampling = WindowSampling.SYMMETRIC
     sampling._value = 2

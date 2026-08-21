@@ -25,8 +25,8 @@ and the installed-package smoke test calls a public window function.
   input controls `SAME` length.
 - [x] Specify empty-input and size-overflow error behavior before implementation.
 - [x] Implement correctness-first direct `Float64` convolution.
-- [ ] Implement correlation with an explicit lag convention.
-- [ ] Add hand-computed fixtures and invariants for commutativity, impulses,
+- [x] Implement correlation with an explicit lag convention.
+- [x] Add hand-computed fixtures and invariants for commutativity, impulses,
   constants, and convolution/correlation relationships.
 - [x] Add a small example and size-based benchmark methodology.
 

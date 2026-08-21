@@ -1,10 +1,11 @@
 """General cosine windows with explicit sampling and normalization semantics."""
 
 from std.collections import List
+from std.io import Writable, Writer
 from std.math import cos, pi
 
 
-struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable):
+struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable, Writable):
     """Choose whether a window includes both endpoints of its sampled interval.
 
     `SYMMETRIC` includes both endpoints and is appropriate for filter design.
@@ -29,8 +30,16 @@ struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable):
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
 
+    def __str__(self) -> String:
+        var result = String()
+        self.write_to(result)
+        return result^
 
-struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable):
+    def write_to[W: Writer](self, mut writer: W):
+        writer.write("SYMMETRIC" if self == Self.SYMMETRIC else "PERIODIC")
+
+
+struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable, Writable):
     """Choose whether to preserve formula values or rescale sampled values.
 
     `FORMULA` evaluates the conventional coefficients directly. `PEAK` divides
@@ -56,6 +65,14 @@ struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable):
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
 
+    def __str__(self) -> String:
+        var result = String()
+        self.write_to(result)
+        return result^
+
+    def write_to[W: Writer](self, mut writer: W):
+        writer.write("FORMULA" if self == Self.FORMULA else "PEAK")
+
 
 def _normalize_peak(mut values: List[Float64]) raises:
     var peak = 0.0
@@ -71,7 +88,7 @@ def _normalize_peak(mut values: List[Float64]) raises:
 
 def general_cosine(
     length: Int,
-    coefficients: Span[Float64, ...],
+    coefficients: Span[Float64, _],
     sampling: WindowSampling = WindowSampling.SYMMETRIC,
     normalization: WindowNormalization = WindowNormalization.FORMULA,
 ) raises -> List[Float64]:

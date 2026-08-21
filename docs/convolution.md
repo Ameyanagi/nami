@@ -31,3 +31,37 @@ and the second as the kernel rather than silently swapping their roles.
 The initial implementation materializes the full result before selecting SAME
 or VALID. This establishes one deterministic numerical contract before later
 work measures whether mode-specific allocation or SIMD kernels are warranted.
+
+## Correlation
+
+`correlate(signal, kernel, mode)` computes direct cross-correlation without
+complex conjugation. For every output mode, its definition is
+
+```text
+correlate(a, b, mode) == convolve(a, reversed(b), mode)
+```
+
+This relationship also determines the centering of `SAME` for even-length
+kernels.
+
+For a kernel of length `M`, full-output index `m` represents lag
+`m - (M - 1)`. The value at lag `k` is
+
+```text
+sum_n signal[n + k] * kernel[n]
+```
+
+where the sum includes only indices present in both inputs. Zero lag is at
+full-output index `M - 1`; positive lag means the signal is shifted toward
+larger indices relative to the kernel.
+
+The `FULL`, `SAME`, and `VALID` slices have exactly the convolution semantics
+documented above. In particular, `SAME` returns the signal length with the
+left-centered even-kernel convention, and `VALID` requires the kernel length
+to be no greater than the signal length.
+
+Correlation has the same error contract as convolution: inputs must be
+non-empty and finite, `N + M - 1` must fit in `Int`, every accumulated result
+must remain finite, and invalid `VALID` dimensions raise with both lengths in
+the diagnostic. Correlation preserves both inputs and allocates a reversed
+kernel plus the convolution result.
