@@ -41,7 +41,9 @@ uv run scripts/fixtures/generate_find_peaks.py
 ```
 
 The generator records the exact input and calls `scipy.signal.find_peaks` for
-the baseline, height, distance, prominence, and combined cases, followed by
+the baseline; lower and upper height, prominence, and width bounds; distance;
+combined filters; and a non-default relative height. It prints the widths
+returned by SciPy whenever width is requested and calls
 `scipy.signal.peak_prominences` for every returned index. The committed values
 are computed numerical outputs, not copied SciPy or NumPy source code. SciPy
 and NumPy are BSD-3-Clause licensed; their code is not redistributed by these

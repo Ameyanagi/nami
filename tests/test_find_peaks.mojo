@@ -132,6 +132,131 @@ def test_scipy_combined_fixture() raises:
     )
 
 
+def test_scipy_min_width_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, min_width=2.0),
+        [4, 12, 14, 16, 23],
+        [2.0, 0.9, 3.4, 3.4, 1.5000000000000002],
+    )
+
+
+def test_scipy_max_width_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, max_width=2.5),
+        [1, 4, 8, 10, 18, 20, 26, 28],
+        [
+            0.8999999999999999,
+            2.0,
+            2.9,
+            0.09999999999999987,
+            0.15000000000000013,
+            0.050000000000000044,
+            4.7,
+            0.4,
+        ],
+    )
+
+
+def test_scipy_width_range_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, min_width=1.5, max_width=3.0),
+        [4, 12, 14, 16],
+        [2.0, 0.9, 3.4, 3.4],
+    )
+
+
+def test_scipy_max_height_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, max_height=3.0),
+        [1, 4, 10, 12, 18, 20, 23, 28],
+        [
+            0.8999999999999999,
+            2.0,
+            0.09999999999999987,
+            0.9,
+            0.15000000000000013,
+            0.050000000000000044,
+            1.5000000000000002,
+            0.4,
+        ],
+    )
+
+
+def test_scipy_height_range_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, min_height=1.0, max_height=3.0),
+        [1, 4, 10, 12, 18, 20, 23],
+        [
+            0.8999999999999999,
+            2.0,
+            0.09999999999999987,
+            0.9,
+            0.15000000000000013,
+            0.050000000000000044,
+            1.5000000000000002,
+        ],
+    )
+
+
+def test_scipy_max_prominence_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, max_prominence=2.0),
+        [1, 4, 10, 12, 18, 20, 23, 28],
+        [
+            0.8999999999999999,
+            2.0,
+            0.09999999999999987,
+            0.9,
+            0.15000000000000013,
+            0.050000000000000044,
+            1.5000000000000002,
+            0.4,
+        ],
+    )
+
+
+def test_scipy_combined_all_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(
+            signal,
+            min_height=1.0,
+            min_distance=3,
+            min_prominence=0.5,
+            max_prominence=4.0,
+            min_width=1.0,
+            max_width=4.0,
+        ),
+        [4, 8, 12, 16, 23],
+        [2.0, 2.9, 0.9, 3.4, 1.5000000000000002],
+    )
+
+
+def test_scipy_rel_height_one_fixture() raises:
+    var signal = fixture_signal()
+    assert_peaks(
+        find_peaks(signal, min_width=2.0, rel_height=1.0),
+        [1, 4, 8, 12, 14, 16, 18, 23, 26],
+        [
+            0.8999999999999999,
+            2.0,
+            2.9,
+            0.9,
+            3.4,
+            3.4,
+            0.15000000000000013,
+            1.5000000000000002,
+            4.7,
+        ],
+    )
+
+
 def test_two_sinusoid_prominent_peaks_follow_five_cycle_crests() raises:
     var signal = List[Float64](capacity=200)
     for index in range(200):
@@ -211,6 +336,22 @@ def test_invalid_inputs_include_values() raises:
         _ = find_peaks(signal, min_height=Float64("nan"))
     with assert_raises(contains="got min_prominence=nan"):
         _ = find_peaks(signal, min_prominence=Float64("nan"))
+
+
+def test_new_invalid_inputs_include_values() raises:
+    var signal: List[Float64] = [0.0, 1.0, 0.0]
+    with assert_raises(contains="got max_height=nan"):
+        _ = find_peaks(signal, max_height=Float64("nan"))
+    with assert_raises(contains="got max_prominence=nan"):
+        _ = find_peaks(signal, max_prominence=Float64("nan"))
+    with assert_raises(contains="got min_width=nan"):
+        _ = find_peaks(signal, min_width=Float64("nan"))
+    with assert_raises(contains="got max_width=nan"):
+        _ = find_peaks(signal, max_width=Float64("nan"))
+    with assert_raises(contains="got rel_height=-0.5"):
+        _ = find_peaks(signal, rel_height=-0.5)
+    with assert_raises(contains="got rel_height=nan"):
+        _ = find_peaks(signal, rel_height=Float64("nan"))
 
 
 def test_explicit_validation_rejects_corrupted_parallel_storage() raises:

@@ -8,6 +8,7 @@ from std.math import isfinite
 struct Peaks(Copyable, Equatable, Movable, Sized, Writable):
     """Own peak indices and their parallel, always-computed prominences.
 
+    Widths can select peaks but are not stored in the result.
     Direct mutation of `_indices` or `_prominences` is out of contract; use
     `validate()` for an explicit checkpoint after unusual mutation.
     """
@@ -67,11 +68,34 @@ struct Peaks(Copyable, Equatable, Movable, Sized, Writable):
         writer.write("Peaks(count=", len(self), ")")
 
 
+struct _PeakProminence(Copyable, Movable):
+    """Store a peak's prominence and closest strict-minimum bases."""
+
+    var prominence: Float64
+    var left_base: Int
+    var right_base: Int
+
+    def __init__(
+        out self,
+        prominence: Float64,
+        left_base: Int,
+        right_base: Int,
+    ):
+        self.prominence = prominence
+        self.left_base = left_base
+        self.right_base = right_base
+
+
 def _validate_find_peaks_inputs(
     signal: Span[Float64, _],
     min_height: Optional[Float64],
+    max_height: Optional[Float64],
     min_distance: Int,
     min_prominence: Optional[Float64],
+    max_prominence: Optional[Float64],
+    min_width: Optional[Float64],
+    max_width: Optional[Float64],
+    rel_height: Float64,
 ) raises:
     if len(signal) == 0:
         raise Error(
@@ -104,11 +128,46 @@ def _validate_find_peaks_inputs(
                 min_height.value(),
             )
         )
+    if max_height and not isfinite(max_height.value()):
+        raise Error(
+            String(
+                "find_peaks max_height must be finite; got max_height=",
+                max_height.value(),
+            )
+        )
     if min_prominence and not isfinite(min_prominence.value()):
         raise Error(
             String(
                 "find_peaks min_prominence must be finite; got min_prominence=",
                 min_prominence.value(),
+            )
+        )
+    if max_prominence and not isfinite(max_prominence.value()):
+        raise Error(
+            String(
+                "find_peaks max_prominence must be finite; got max_prominence=",
+                max_prominence.value(),
+            )
+        )
+    if min_width and not isfinite(min_width.value()):
+        raise Error(
+            String(
+                "find_peaks min_width must be finite; got min_width=",
+                min_width.value(),
+            )
+        )
+    if max_width and not isfinite(max_width.value()):
+        raise Error(
+            String(
+                "find_peaks max_width must be finite; got max_width=",
+                max_width.value(),
+            )
+        )
+    if not isfinite(rel_height) or rel_height < 0.0:
+        raise Error(
+            String(
+                "find_peaks rel_height must be finite and >= 0; got rel_height=",
+                rel_height,
             )
         )
 
@@ -187,10 +246,11 @@ def _select_by_distance(
     return selected^
 
 
-def _peak_prominence(signal: Span[Float64, _], peak: Int) -> Float64:
-    """Return full-window SciPy-style prominence for a trusted local peak."""
+def _peak_prominence(signal: Span[Float64, _], peak: Int) -> _PeakProminence:
+    """Return full-window SciPy-style prominence and bases for a local peak."""
     var peak_height = signal[peak]
     var left_minimum = peak_height
+    var left_base = peak
     var left_index = peak
     while left_index > 0:
         left_index -= 1
@@ -198,8 +258,10 @@ def _peak_prominence(signal: Span[Float64, _], peak: Int) -> Float64:
             break
         if signal[left_index] < left_minimum:
             left_minimum = signal[left_index]
+            left_base = left_index
 
     var right_minimum = peak_height
+    var right_base = peak
     var right_index = peak
     while right_index < len(signal) - 1:
         right_index += 1
@@ -207,33 +269,76 @@ def _peak_prominence(signal: Span[Float64, _], peak: Int) -> Float64:
             break
         if signal[right_index] < right_minimum:
             right_minimum = signal[right_index]
+            right_base = right_index
 
     var contour_height = (
         left_minimum if left_minimum >= right_minimum else right_minimum
     )
-    return peak_height - contour_height
+    return _PeakProminence(peak_height - contour_height, left_base, right_base)
+
+
+def _peak_width(
+    signal: Span[Float64, _],
+    peak: Int,
+    properties: _PeakProminence,
+    rel_height: Float64,
+) -> Float64:
+    """Return the interpolated width at the requested relative height."""
+    var height = signal[peak] - properties.prominence * rel_height
+
+    var left_index = peak
+    while left_index > properties.left_base and signal[left_index] > height:
+        left_index -= 1
+    var left_ip = Float64(left_index)
+    if signal[left_index] < height:
+        left_ip += (height - signal[left_index]) / (
+            signal[left_index + 1] - signal[left_index]
+        )
+
+    var right_index = peak
+    while right_index < properties.right_base and signal[right_index] > height:
+        right_index += 1
+    var right_ip = Float64(right_index)
+    if signal[right_index] < height:
+        right_ip -= (height - signal[right_index]) / (
+            signal[right_index - 1] - signal[right_index]
+        )
+
+    return right_ip - left_ip
 
 
 def find_peaks(
     signal: Span[Float64, _],
     *,
     min_height: Optional[Float64] = None,
+    max_height: Optional[Float64] = None,
     min_distance: Int = 1,
     min_prominence: Optional[Float64] = None,
+    max_prominence: Optional[Float64] = None,
+    min_width: Optional[Float64] = None,
+    max_width: Optional[Float64] = None,
+    rel_height: Float64 = 0.5,
 ) raises -> Peaks:
     """Find local maxima and return their always-computed prominences.
 
     Flat maxima are reported once at their floor midpoint and endpoints are
-    excluded. Filters run in height, distance, then prominence order. Distance
-    gives higher peaks priority and gives the later index priority among equal
-    heights. The input is preserved and must be non-empty and finite; distances
-    must be positive and optional bounds must be finite.
+    excluded. Filters run in height, distance, prominence, then width order.
+    Widths are computed only when a width bound is supplied and are not stored.
+    Distance gives higher peaks priority and gives the later index priority
+    among equal heights. The input is preserved and must be non-empty and
+    finite; distances must be positive, optional bounds must be finite, and
+    `rel_height` must be finite and non-negative.
     """
     _validate_find_peaks_inputs(
         signal,
         min_height,
+        max_height,
         min_distance,
         min_prominence,
+        max_prominence,
+        min_width,
+        max_width,
+        rel_height,
     )
 
     var local_maxima = _local_maxima(signal)
@@ -241,6 +346,8 @@ def find_peaks(
     for position in range(len(local_maxima)):
         var peak = local_maxima[position]
         if min_height and signal[peak] < min_height.value():
+            continue
+        if max_height and signal[peak] > max_height.value():
             continue
         height_filtered.append(peak)
 
@@ -253,10 +360,18 @@ def find_peaks(
     var prominences = List[Float64](capacity=len(distance_filtered))
     for position in range(len(distance_filtered)):
         var peak = distance_filtered[position]
-        var prominence = _peak_prominence(signal, peak)
-        if min_prominence and prominence < min_prominence.value():
+        var properties = _peak_prominence(signal, peak)
+        if min_prominence and properties.prominence < min_prominence.value():
             continue
+        if max_prominence and properties.prominence > max_prominence.value():
+            continue
+        if min_width or max_width:
+            var width = _peak_width(signal, peak, properties, rel_height)
+            if min_width and width < min_width.value():
+                continue
+            if max_width and width > max_width.value():
+                continue
         indices.append(peak)
-        prominences.append(prominence)
+        prominences.append(properties.prominence)
 
     return Peaks(_indices=indices^, _prominences=prominences^)
