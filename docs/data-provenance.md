@@ -65,6 +65,23 @@ both symmetric and periodic sampling, `scipy.signal.savgol_coeffs`, and
 generator. The committed values are computed numerical outputs; SciPy or NumPy
 source code is not redistributed.
 
+### Periodogram and Welch power spectral density
+
+The periodogram, Welch, and detrend-to-Welch workflow values embedded in
+`tests/test_spectral.mojo` were generated on 2026-08-21 from
+[SciPy 1.16.1](https://github.com/scipy/scipy/tree/v1.16.1) and
+[NumPy 2.3.2](https://github.com/numpy/numpy/tree/v2.3.2) with:
+
+```text
+uv run scripts/fixtures/generate_spectral.py
+```
+
+The generator synthesizes every signal from the documented closed forms in the
+script, so no input data is committed. It calls `scipy.signal.periodogram` and
+`scipy.signal.welch` with their curated default semantics, plus detrending and
+peak finding for the README workflow. The committed values are computed
+numerical outputs; SciPy or NumPy source code is not redistributed.
+
 Every future generated artifact must record:
 
 - upstream project and canonical URL;

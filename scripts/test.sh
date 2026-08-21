@@ -7,3 +7,5 @@ done
 
 mkdir -p .pixi/test-bin
 mojo build -I src examples/basic.mojo -o .pixi/test-bin/basic
+mojo build -I src examples/spectral_workflow.mojo \
+  -o .pixi/test-bin/spectral_workflow

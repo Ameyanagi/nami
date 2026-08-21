@@ -10,10 +10,9 @@ Nami provides scientific signal-processing algorithms and delegates Fourier tran
 
 The v0.1 work is deliberately staged: dependency-free windows first, direct
 convolution and correlation second, and stabilization of that elementary API
-third. A small spectral API begins only after those stages and a compatible
-ShuhaFFT release; its FFT-dependent imports remain isolated to spectral modules.
-The project is independently installable and does not require any application
-from the wider ecosystem.
+third. The small spectral API keeps its FFT-dependent imports isolated under
+`nami.spectral`. The project is independently installable and does not require
+any application from the wider ecosystem.
 
 ## Development
 
@@ -36,6 +35,49 @@ documented.
 The Mojo import is `nami`. The eventual Conda distribution is
 `mojo-nami`. Source lives under `src/nami/`, whose
 `__init__.mojo` defines the package boundary.
+
+## Quickstart: detrend, Welch PSD, and peak finding
+
+This weekly workflow turns uniformly sampled measurements into a one-sided
+power spectral density, then locates prominent spectral lines:
+
+```mojo
+from nami import detrend, find_peaks
+from nami.spectral import welch
+from std.collections import List
+from std.math import pi, sin
+
+
+def main() raises:
+    var sample_rate = 800.0
+    var samples = List[Float64](capacity=2048)
+    for index in range(2048):
+        var t = Float64(index) / sample_rate
+        samples.append(
+            sin(2.0 * pi * 50.0 * t)
+            + 0.3 * sin(2.0 * pi * 175.0 * t)
+            + 0.002 * Float64(index)
+        )
+
+    var stationary = detrend(samples)
+    var spectrum = welch(
+        stationary,
+        sample_rate,
+        segment_length=256,
+    )
+    var peaks = find_peaks(spectrum.power(), min_prominence=0.001)
+    var frequencies = spectrum.frequencies()
+    var peak_indices = peaks.indices()
+    for position in range(len(peaks)):
+        print("spectral line:", frequencies[peak_indices[position]], "Hz")
+```
+
+The default linear detrend removes the drift; Welch and `find_peaks` then find
+the 50 Hz line and its 175 Hz companion. Run the complete example with
+`mojo run -I src examples/spectral_workflow.mojo` in an environment where the
+`mojo-shuhafft` package is installed. Welch segment lengths must be powers of
+two while ShuhaFFT is radix-2 only. `nami.spectral` requires `mojo-shuhafft`,
+while importing the elementary `nami` root remains dependency-free.
 
 ## Window functions
 
@@ -102,7 +144,8 @@ nonfinite sample raises. See [the convolution contract](docs/convolution.md).
 - `conda.recipe/`: local Rattler build recipe
 
 See [the architecture](docs/architecture.md), [design principles](docs/design.md),
-and [roadmap](docs/roadmap.md) before proposing a new dependency or feature.
+the [spectral contract](docs/spectral.md), and [roadmap](docs/roadmap.md) before
+proposing a new dependency or feature.
 
 ## License
 

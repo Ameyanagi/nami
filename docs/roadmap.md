@@ -49,13 +49,13 @@ compiled example or downstream use.
 This stage begins only after ShuhaFFT has a compatible tagged release and its
 planner/normalization contract is documented.
 
-- [ ] Add ShuhaFFT only to a `nami.spectral` adapter layer.
-- [ ] Define frequency-bin ordering, transform normalization, real-input output
+- [x] Add ShuhaFFT only to a `nami.spectral` adapter layer.
+- [x] Define frequency-bin ordering, transform normalization, real-input output
   length, sample-rate validation, and units before implementation.
 - [ ] Add a separate spectral CI lane with ShuhaFFT installed.
 - [ ] Keep an elementary CI lane in which ShuhaFFT is absent.
-- [ ] Implement the smallest useful real-signal spectrum operation.
-- [ ] Add sinusoid/bin reference fixtures and energy invariants.
+- [x] Implement the smallest useful real-signal spectrum operation.
+- [x] Add sinusoid/bin reference fixtures and energy invariants.
 - [ ] Decide and document how the distribution expresses the spectral optional
   dependency; do not ship a silently broken submodule.
 
