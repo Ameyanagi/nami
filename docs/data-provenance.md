@@ -29,6 +29,24 @@ The committed values are computed numerical outputs, not copied SciPy or NumPy
 source code. SciPy and NumPy are BSD-3-Clause licensed; their code is not
 redistributed by these fixtures.
 
+### Peak finding
+
+The peak indices and prominences embedded in `tests/test_find_peaks.mojo` were
+generated on 2026-08-21 from
+[SciPy 1.16.1](https://github.com/scipy/scipy/tree/v1.16.1) and
+[NumPy 2.3.2](https://github.com/numpy/numpy/tree/v2.3.2) with:
+
+```text
+uv run scripts/fixtures/generate_find_peaks.py
+```
+
+The generator records the exact input and calls `scipy.signal.find_peaks` for
+the baseline, height, distance, prominence, and combined cases, followed by
+`scipy.signal.peak_prominences` for every returned index. The committed values
+are computed numerical outputs, not copied SciPy or NumPy source code. SciPy
+and NumPy are BSD-3-Clause licensed; their code is not redistributed by these
+fixtures.
+
 ### Additional windows and Savitzky-Golay
 
 The Nuttall, Blackman-Harris, flat-top, and Savitzky-Golay reference values
