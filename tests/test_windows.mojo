@@ -2,9 +2,12 @@ from nami import (
     WindowNormalization,
     WindowSampling,
     blackman,
+    blackman_harris,
+    flattop,
     general_cosine,
     hamming,
     hann,
+    nuttall,
 )
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -35,6 +38,93 @@ def test_blackman_symmetric_reference() raises:
     assert_values_near(blackman(5), [0.0, 0.34, 1.0, 0.34, 0.0])
 
 
+def test_nuttall_scipy_references() raises:
+    assert_values_near(
+        nuttall(8),
+        [
+            0.0003628000000000381,
+            0.03777576895352028,
+            0.34272761996881956,
+            0.8918518610776603,
+            0.8918518610776603,
+            0.34272761996881956,
+            0.03777576895352028,
+            0.0003628000000000381,
+        ],
+    )
+    assert_values_near(
+        nuttall(8, WindowSampling.PERIODIC),
+        [
+            0.0003628000000000381,
+            0.025205566515401824,
+            0.22698240000000006,
+            0.7019582334845982,
+            1.0,
+            0.7019582334845982,
+            0.22698240000000006,
+            0.025205566515401824,
+        ],
+    )
+
+
+def test_blackman_harris_scipy_references() raises:
+    assert_values_near(
+        blackman_harris(8),
+        [
+            6.0000000000001025e-05,
+            0.0333917234781512,
+            0.33283350429856506,
+            0.8893697722232838,
+            0.8893697722232838,
+            0.33283350429856506,
+            0.0333917234781512,
+            6.0000000000001025e-05,
+        ],
+    )
+    assert_values_near(
+        blackman_harris(8, WindowSampling.PERIODIC),
+        [
+            6.0000000000001025e-05,
+            0.021735837018679628,
+            0.21747000000000008,
+            0.6957641629813204,
+            1.0,
+            0.6957641629813204,
+            0.21747000000000008,
+            0.021735837018679628,
+        ],
+    )
+
+
+def test_flattop_scipy_references() raises:
+    assert_values_near(
+        flattop(8),
+        [
+            -0.0004210510000000013,
+            -0.03684078115492349,
+            0.01070371671615349,
+            0.78087391493877,
+            0.78087391493877,
+            0.01070371671615349,
+            -0.03684078115492349,
+            -0.0004210510000000013,
+        ],
+    )
+    assert_values_near(
+        flattop(8, WindowSampling.PERIODIC),
+        [
+            -0.0004210510000000013,
+            -0.026872193286334545,
+            -0.05473684,
+            0.4441353572863345,
+            1.000000003,
+            0.4441353572863345,
+            -0.05473684,
+            -0.026872193286334545,
+        ],
+    )
+
+
 def test_general_cosine_accepts_arbitrary_length_coefficients() raises:
     var nuttall: List[Float64] = [0.3635819, 0.4891775, 0.1365995, 0.0106411]
     assert_values_near(
@@ -46,6 +136,34 @@ def test_general_cosine_accepts_arbitrary_length_coefficients() raises:
 def test_blackman_matches_general_cosine() raises:
     var coefficients: List[Float64] = [0.42, 0.5, 0.08]
     assert_values_near(blackman(8), general_cosine(8, coefficients))
+
+
+def test_new_wrappers_match_general_cosine() raises:
+    var nuttall_coefficients: List[Float64] = [
+        0.3635819,
+        0.4891775,
+        0.1365995,
+        0.0106411,
+    ]
+    var blackman_harris_coefficients: List[Float64] = [
+        0.35875,
+        0.48829,
+        0.14128,
+        0.01168,
+    ]
+    var flattop_coefficients: List[Float64] = [
+        0.21557895,
+        0.41663158,
+        0.277263158,
+        0.083578947,
+        0.006947368,
+    ]
+    assert_values_near(nuttall(8), general_cosine(8, nuttall_coefficients))
+    assert_values_near(
+        blackman_harris(8),
+        general_cosine(8, blackman_harris_coefficients),
+    )
+    assert_values_near(flattop(8), general_cosine(8, flattop_coefficients))
 
 
 def test_periodic_reference() raises:
@@ -102,6 +220,12 @@ def test_empty_and_singleton_contract() raises:
     assert_values_near(hann(1), [1.0])
     assert_values_near(hamming(1, WindowSampling.PERIODIC), [1.0])
     assert_values_near(blackman(1, normalization=WindowNormalization.PEAK), [1.0])
+    assert_equal(len(nuttall(0)), 0)
+    assert_equal(len(blackman_harris(0)), 0)
+    assert_equal(len(flattop(0)), 0)
+    assert_values_near(nuttall(1), [1.0])
+    assert_values_near(blackman_harris(1, WindowSampling.PERIODIC), [1.0])
+    assert_values_near(flattop(1, normalization=WindowNormalization.PEAK), [1.0])
 
 
 def test_negative_length_rejected() raises:

@@ -164,3 +164,55 @@ def blackman(
     """
     var coefficients: List[Float64] = [0.42, 0.5, 0.08]
     return general_cosine(length, coefficients, sampling, normalization)
+
+
+def nuttall(
+    length: Int,
+    sampling: WindowSampling = WindowSampling.SYMMETRIC,
+    normalization: WindowNormalization = WindowNormalization.FORMULA,
+) raises -> List[Float64]:
+    """Return a minimum four-term Blackman-Harris Nuttall window.
+
+    Zero length returns an empty list and length one returns `[1.0]`. Negative
+    lengths raise. Peak normalization also raises when every sample is
+    numerically zero. The coefficients match SciPy's published constants.
+    """
+    var coefficients: List[Float64] = [0.3635819, 0.4891775, 0.1365995, 0.0106411]
+    return general_cosine(length, coefficients, sampling, normalization)
+
+
+def blackman_harris(
+    length: Int,
+    sampling: WindowSampling = WindowSampling.SYMMETRIC,
+    normalization: WindowNormalization = WindowNormalization.FORMULA,
+) raises -> List[Float64]:
+    """Return a minimum four-term Blackman-Harris window.
+
+    Zero length returns an empty list and length one returns `[1.0]`. Negative
+    lengths raise. Peak normalization also raises when every sample is
+    numerically zero. The coefficients match SciPy's published constants.
+    """
+    var coefficients: List[Float64] = [0.35875, 0.48829, 0.14128, 0.01168]
+    return general_cosine(length, coefficients, sampling, normalization)
+
+
+def flattop(
+    length: Int,
+    sampling: WindowSampling = WindowSampling.SYMMETRIC,
+    normalization: WindowNormalization = WindowNormalization.FORMULA,
+) raises -> List[Float64]:
+    """Return a flat-top amplitude-calibration window.
+
+    Negative samples are expected for this amplitude-calibration window. Peak
+    normalization uses the largest sampled absolute value. Zero length returns
+    an empty list and length one returns `[1.0]`; negative lengths raise. The
+    coefficients match SciPy's published constants.
+    """
+    var coefficients: List[Float64] = [
+        0.21557895,
+        0.41663158,
+        0.277263158,
+        0.083578947,
+        0.006947368,
+    ]
+    return general_cosine(length, coefficients, sampling, normalization)
