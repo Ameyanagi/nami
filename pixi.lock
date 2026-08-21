@@ -197,13 +197,13 @@ packages:
   size: 94892
   timestamp: 1787303692509
 - conda: https://ameyanagi.github.io/mojo-channel/osx-arm64/mojo-shuhafft-0.0.0-h60d57d3_0.conda
-  sha256: 84f3868eeb001bc39a55b2c802ae6b2415e33bba44f51ebf214822bbc2cb3f1a
-  md5: ad2e6eff7af4d25e0b6294d4f57f170f
+  sha256: 22d82e08261a782351ffc1e6e5ad340d8fb45a5c9394b4430e552792906b2b8b
+  md5: c37991b82ea493730bc5859581f17ec5
   depends:
   - mojo-compiler >=1.0.0,<2.0a0
   license: MIT OR Apache-2.0
-  size: 93979
-  timestamp: 1787271328913
+  size: 93967
+  timestamp: 1787303693642
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
   sha256: 1dd3fffd892081df9726d7eb7e0dea6198962ba775bd88842135a4ddb4deb3c9
