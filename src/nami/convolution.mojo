@@ -25,7 +25,15 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Raise if unusual direct field mutation broke the mode invariant."""
         if self != Self.FULL and self != Self.SAME and self != Self.VALID:
-            raise Error("invalid convolution mode")
+            raise Error(
+                String(
+                    (
+                        "ConvolutionMode _value must be 0 (FULL), 1 (SAME), or 2 "
+                        "(VALID); got _value="
+                    ),
+                    self._value,
+                )
+            )
 
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
@@ -45,10 +53,29 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable, Writable):
 
 
 def _full_output_length(signal_length: Int, kernel_length: Int) raises -> Int:
-    if signal_length <= 0 or kernel_length <= 0:
-        raise Error("convolution inputs must be non-empty")
+    if signal_length <= 0:
+        raise Error(
+            String(
+                "convolution signal must be non-empty; got signal_length=",
+                signal_length,
+            )
+        )
+    if kernel_length <= 0:
+        raise Error(
+            String(
+                "convolution kernel must be non-empty; got kernel_length=",
+                kernel_length,
+            )
+        )
     if signal_length > Int.MAX - (kernel_length - 1):
-        raise Error("convolution output length overflows Int")
+        raise Error(
+            String(
+                "convolution output length overflows Int; got signal_length=",
+                signal_length,
+                ", kernel_length=",
+                kernel_length,
+            )
+        )
     return signal_length + kernel_length - 1
 
 
@@ -84,6 +111,23 @@ def _output_start(kernel_length: Int, mode: ConvolutionMode) -> Int:
     return 0
 
 
+def _validate_finite(values: Span[Float64, _], *, argument: StringLiteral) raises:
+    for index in range(len(values)):
+        if not isfinite(values[index]):
+            raise Error(
+                String(
+                    "convolution ",
+                    argument,
+                    " must contain only finite values; got ",
+                    argument,
+                    "[",
+                    index,
+                    "]=",
+                    values[index],
+                )
+            )
+
+
 def _convolve_core(
     signal: Span[Float64, _],
     kernel: Span[Float64, _],
@@ -91,13 +135,6 @@ def _convolve_core(
 ) raises -> List[Float64]:
     """Run validated direct convolution for the public entry points."""
     var output_length = _output_length(len(signal), len(kernel), mode)
-    for index in range(len(signal)):
-        if not isfinite(signal[index]):
-            raise Error("convolution inputs must contain only finite values")
-    for index in range(len(kernel)):
-        if not isfinite(kernel[index]):
-            raise Error("convolution inputs must contain only finite values")
-
     var full_length = _full_output_length(len(signal), len(kernel))
     var full = List[Float64](length=full_length, fill=0.0)
     for signal_index in range(len(signal)):
@@ -107,7 +144,17 @@ def _convolve_core(
                 full[output_index] + signal[signal_index] * kernel[kernel_index]
             )
             if not isfinite(updated):
-                raise Error("convolution result must contain only finite values")
+                raise Error(
+                    String(
+                        (
+                            "convolution result must contain only finite values; "
+                            "got output["
+                        ),
+                        output_index,
+                        "]=",
+                        updated,
+                    )
+                )
             full[output_index] = updated
 
     var start = _output_start(len(kernel), mode)
@@ -132,6 +179,8 @@ def convolve(
     kernel to be no longer than the signal. Arithmetic overflow raises instead
     of returning a non-finite sample. Inputs are preserved.
     """
+    _validate_finite(signal, argument="signal")
+    _validate_finite(kernel, argument="kernel")
     return _convolve_core(signal, kernel, mode)
 
 
@@ -151,6 +200,8 @@ def correlate(
     longer than the signal, and output-length or arithmetic overflow raises.
     Inputs are preserved.
     """
+    _validate_finite(signal, argument="signal")
+    _validate_finite(kernel, argument="kernel")
     var reversed_kernel = List[Float64](capacity=len(kernel))
     for index in range(len(kernel)):
         reversed_kernel.append(kernel[len(kernel) - index - 1])

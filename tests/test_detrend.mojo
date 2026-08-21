@@ -84,11 +84,15 @@ def test_single_sample_returns_zero_for_both_kinds() raises:
 
 def test_empty_and_nonfinite_inputs_are_rejected() raises:
     var empty = List[Float64]()
-    with assert_raises(contains="detrend input must be non-empty"):
+    with assert_raises(
+        contains="detrend signal must be non-empty; got signal_length=0"
+    ):
         _ = detrend(empty)
 
     var nonfinite: List[Float64] = [1.0, Float64("nan")]
-    with assert_raises(contains="input must contain only finite values"):
+    with assert_raises(
+        contains="detrend signal must contain only finite values; got signal[1]=nan"
+    ):
         _ = detrend(nonfinite)
 
 
@@ -101,7 +105,9 @@ def test_kind_constants_are_distinct_and_writable() raises:
 def test_explicit_kind_validation_rejects_corrupted_storage() raises:
     var kind = DetrendKind.LINEAR
     kind._value = 2
-    with assert_raises(contains="invalid detrend kind"):
+    with assert_raises(
+        contains="DetrendKind _value must be 0 (CONSTANT) or 1 (LINEAR); got _value=2"
+    ):
         kind.validate()
 
 

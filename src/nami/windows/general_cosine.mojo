@@ -25,7 +25,15 @@ struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Raise if unusual direct field mutation broke the mode invariant."""
         if self != Self.SYMMETRIC and self != Self.PERIODIC:
-            raise Error("invalid window sampling")
+            raise Error(
+                String(
+                    (
+                        "WindowSampling _value must be 0 (SYMMETRIC) or 1 "
+                        "(PERIODIC); got _value="
+                    ),
+                    self._value,
+                )
+            )
 
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
@@ -60,7 +68,15 @@ struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Raise if unusual direct field mutation broke the mode invariant."""
         if self != Self.FORMULA and self != Self.PEAK:
-            raise Error("invalid window normalization")
+            raise Error(
+                String(
+                    (
+                        "WindowNormalization _value must be 0 (FORMULA) or 1 "
+                        "(PEAK); got _value="
+                    ),
+                    self._value,
+                )
+            )
 
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
@@ -74,6 +90,17 @@ struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable, Writable):
         writer.write("FORMULA" if self == Self.FORMULA else "PEAK")
 
 
+def _validate_length(length: Int, *, operation: StringLiteral) raises:
+    if length < 0:
+        raise Error(
+            String(
+                operation,
+                " length must be non-negative; got length=",
+                length,
+            )
+        )
+
+
 def _normalize_peak(mut values: List[Float64]) raises:
     var peak = 0.0
     for index in range(len(values)):
@@ -81,7 +108,15 @@ def _normalize_peak(mut values: List[Float64]) raises:
     # The supported formulas have coefficients of order one. Treat residuals at
     # this absolute scale as zero so endpoint roundoff is never amplified.
     if peak <= 1e-15:
-        raise Error("cannot peak-normalize a numerically zero window")
+        raise Error(
+            String(
+                (
+                    "window peak normalization requires a sample with |value| > "
+                    "1e-15; got max_abs="
+                ),
+                peak,
+            )
+        )
     for index in range(len(values)):
         values[index] /= peak
 
@@ -98,8 +133,7 @@ def general_cosine(
     signs when the same formula is written over a phase interval from zero to
     two pi. Zero length returns an empty list and length one returns `[1.0]`.
     """
-    if length < 0:
-        raise Error("window length must be non-negative")
+    _validate_length(length, operation="general_cosine")
     if length == 0:
         return List[Float64]()
     if length == 1:
@@ -132,6 +166,7 @@ def hann(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default is the conventional symmetric formula.
     """
+    _validate_length(length, operation="hann")
     var coefficients: List[Float64] = [0.5, 0.5]
     return general_cosine(length, coefficients, sampling, normalization)
 
@@ -147,6 +182,7 @@ def hamming(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default is the conventional symmetric formula.
     """
+    _validate_length(length, operation="hamming")
     var coefficients: List[Float64] = [0.54, 0.46]
     return general_cosine(length, coefficients, sampling, normalization)
 
@@ -162,6 +198,7 @@ def blackman(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The default coefficients are 0.42, 0.5, and 0.08.
     """
+    _validate_length(length, operation="blackman")
     var coefficients: List[Float64] = [0.42, 0.5, 0.08]
     return general_cosine(length, coefficients, sampling, normalization)
 
@@ -177,6 +214,7 @@ def nuttall(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The coefficients match SciPy's published constants.
     """
+    _validate_length(length, operation="nuttall")
     var coefficients: List[Float64] = [0.3635819, 0.4891775, 0.1365995, 0.0106411]
     return general_cosine(length, coefficients, sampling, normalization)
 
@@ -192,6 +230,7 @@ def blackman_harris(
     lengths raise. Peak normalization also raises when every sample is
     numerically zero. The coefficients match SciPy's published constants.
     """
+    _validate_length(length, operation="blackman_harris")
     var coefficients: List[Float64] = [0.35875, 0.48829, 0.14128, 0.01168]
     return general_cosine(length, coefficients, sampling, normalization)
 
@@ -208,6 +247,7 @@ def flattop(
     an empty list and length one returns `[1.0]`; negative lengths raise. The
     coefficients match SciPy's published constants.
     """
+    _validate_length(length, operation="flattop")
     var coefficients: List[Float64] = [
         0.21557895,
         0.41663158,

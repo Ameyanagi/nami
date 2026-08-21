@@ -1,4 +1,4 @@
-from nami import ConvolutionMode, convolve
+from nami import ConvolutionMode, convolve, correlate
 from nami.convolution import _output_length
 from std.collections import List
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -109,9 +109,13 @@ def test_output_shape_contract() raises:
 def test_empty_inputs_are_rejected() raises:
     var empty = List[Float64]()
     var value: List[Float64] = [1.0]
-    with assert_raises(contains="convolution inputs must be non-empty"):
+    with assert_raises(
+        contains="convolution signal must be non-empty; got signal_length=0"
+    ):
         _ = convolve(empty, value)
-    with assert_raises(contains="convolution inputs must be non-empty"):
+    with assert_raises(
+        contains="convolution kernel must be non-empty; got kernel_length=0"
+    ):
         _ = convolve(value, empty)
 
 
@@ -129,29 +133,51 @@ def test_valid_mode_rejects_kernel_longer_than_signal() raises:
 
 def test_nonfinite_inputs_and_results_are_rejected() raises:
     var finite: List[Float64] = [1.0, 2.0]
-    var nonfinite: List[Float64] = [Float64("nan")]
-    with assert_raises(contains="inputs must contain only finite values"):
-        _ = convolve(finite, nonfinite)
+    var nonfinite_signal: List[Float64] = [Float64("nan")]
+    with assert_raises(
+        contains="convolution signal must contain only finite values; got signal[0]=nan"
+    ):
+        _ = convolve(nonfinite_signal, finite)
+
+    var correlation_kernel: List[Float64] = [1.0, Float64("nan"), 2.0]
+    with assert_raises(
+        contains="convolution kernel must contain only finite values; got kernel[1]=nan"
+    ):
+        _ = correlate(finite, correlation_kernel)
 
     var huge: List[Float64] = [1e308]
     var two: List[Float64] = [2.0]
-    with assert_raises(contains="result must contain only finite values"):
+    with assert_raises(contains="got output[0]="):
         _ = convolve(huge, two)
 
 
 def test_output_length_overflow_is_rejected_without_allocation() raises:
-    with assert_raises(contains="output length overflows Int"):
+    with assert_raises(
+        contains=(
+            "convolution output length overflows Int; got signal_length="
+            "9223372036854775807, kernel_length=2"
+        )
+    ):
         _ = _output_length(Int.MAX, 2, ConvolutionMode.FULL)
-    with assert_raises(contains="output length overflows Int"):
+    with assert_raises(
+        contains="got signal_length=9223372036854775807, kernel_length=2"
+    ):
         _ = _output_length(Int.MAX, 2, ConvolutionMode.SAME)
-    with assert_raises(contains="output length overflows Int"):
+    with assert_raises(
+        contains="got signal_length=9223372036854775807, kernel_length=2"
+    ):
         _ = _output_length(Int.MAX, 2, ConvolutionMode.VALID)
 
 
 def test_explicit_mode_validation_rejects_corrupted_storage() raises:
     var mode = ConvolutionMode.FULL
     mode._value = 3
-    with assert_raises(contains="invalid convolution mode"):
+    with assert_raises(
+        contains=(
+            "ConvolutionMode _value must be 0 (FULL), 1 (SAME), or 2 (VALID); "
+            "got _value=3"
+        )
+    ):
         mode.validate()
 
 
