@@ -269,6 +269,7 @@ def test_explicit_window_mode_validation_rejects_corrupted_storage() raises:
         )
     ):
         sampling.validate()
+    assert_equal(String(sampling), "INVALID(_value=2)")
 
     var normalization = WindowNormalization.FORMULA
     normalization._value = 2
@@ -278,6 +279,32 @@ def test_explicit_window_mode_validation_rejects_corrupted_storage() raises:
         )
     ):
         normalization.validate()
+    assert_equal(String(normalization), "INVALID(_value=2)")
+
+
+def test_general_cosine_rejects_corrupted_modes_at_public_boundary() raises:
+    var sampling = WindowSampling.SYMMETRIC
+    sampling._value = -1
+    var normalization = WindowNormalization.FORMULA
+    normalization._value = 3
+    var coefficients: List[Float64] = [0.5, 0.5]
+
+    with assert_raises(
+        contains=(
+            "WindowSampling _value must be 0 (SYMMETRIC) or 1 (PERIODIC); got _value=-1"
+        )
+    ):
+        _ = general_cosine(0, coefficients, sampling)
+    with assert_raises(
+        contains=(
+            "WindowNormalization _value must be 0 (FORMULA) or 1 (PEAK); got _value=3"
+        )
+    ):
+        _ = general_cosine(
+            1,
+            coefficients,
+            normalization=normalization,
+        )
 
 
 def main() raises:

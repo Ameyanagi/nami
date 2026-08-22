@@ -7,6 +7,10 @@ the exact compiler version that produced them, so both the Pixi environment and
 Conda recipe pin the compiler. Compiler upgrades are explicit compatibility
 events and require the full locked test suite.
 
+Nami 0.1.0 also pins `mojo-shuhafft` `0.1.0` exactly in its Pixi environment
+and in the recipe's build, host, and run requirements. This keeps the spectral
+adapter aligned with the FFT plan ABI it was compiled and tested against.
+
 ## Platforms
 
 | Platform | Status |
@@ -17,5 +21,6 @@ events and require the full locked test suite.
 | Windows/WSL | Not yet supported or tested |
 | GPU | Not supported unless explicitly listed in the roadmap |
 
-The repository is experimental and has no source-compatibility promise before
-its first release. Each release names the exact compiler used to build it.
+The v0.1 API is experimental and has no source-compatibility promise across
+0.x releases. Each release names the exact compiler and ShuhaFFT dependency
+used to build it.

@@ -109,6 +109,17 @@ def test_explicit_kind_validation_rejects_corrupted_storage() raises:
         contains="DetrendKind _value must be 0 (CONSTANT) or 1 (LINEAR); got _value=2"
     ):
         kind.validate()
+    assert_equal(String(kind), "INVALID(_value=2)")
+
+
+def test_detrend_rejects_corrupted_kind_at_public_boundary() raises:
+    var kind = DetrendKind.LINEAR
+    kind._value = -1
+    var signal: List[Float64] = [1.0, 2.0]
+    with assert_raises(
+        contains="DetrendKind _value must be 0 (CONSTANT) or 1 (LINEAR); got _value=-1"
+    ):
+        _ = detrend(signal, kind)
 
 
 def main() raises:

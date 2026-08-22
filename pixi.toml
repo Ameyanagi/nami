@@ -7,7 +7,7 @@ channels = [
 ]
 name = "nami"
 platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
-version = "0.0.0"
+version = "0.1.0"
 
 [tasks]
 bench = { cmd = "mojo build -I src -O3 benchmarks/bench_analysis.mojo -o .pixi/bench_analysis && ./.pixi/bench_analysis", description = "Run compiled p50/p95 signal-analysis benchmarks" }
@@ -15,16 +15,12 @@ check = { depends-on = ["format-check", "test", "precompile", "readme-check"], d
 example = { cmd = "mojo run -I src examples/basic.mojo", description = "Run the elementary signal-processing example" }
 format = { cmd = "bash scripts/format.sh", description = "Format Mojo source files" }
 format-check = { cmd = "bash scripts/check-format.sh", description = "Verify Mojo formatting without modifying source" }
-package = { cmd = "rattler-build build --recipe conda.recipe/recipe.yaml -c https://ameyanagi.github.io/mojo-channel -c conda-forge -c https://conda.modular.com/max -c https://repo.prefix.dev/modular-community", description = "Build the local Conda package" }
+package = { cmd = "rattler-build build --recipe conda.recipe/recipe.yaml -c https://ameyanagi.github.io/mojo-channel -c https://conda.modular.com/max -c conda-forge", description = "Build the local Conda package" }
 precompile = { cmd = "mojo precompile --Werror --warn-on-unstable-apis src/nami -o .pixi/nami.mojoc", description = "Precompile the package with warnings as errors" }
 readme-check = { cmd = "bash scripts/check-readme.sh", description = "Compile every README Mojo snippet exactly as pasted" }
 test = { cmd = "bash scripts/test.sh", description = "Run all Mojo TestSuite files" }
 
 [dependencies]
-mojo-shuhafft = "*"
+mojo-shuhafft = "==0.1.0"
 mojo = "==1.0.0"
 rattler-build = ">=0.74,<0.75"
-
-# The spectral layer consumes ShuhaFFT as a conda package from the local
-# channel above. The locally built package currently exists for osx-arm64
-# only; Linux lanes gain the dependency once a published channel carries it.
