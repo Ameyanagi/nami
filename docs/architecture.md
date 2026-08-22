@@ -21,7 +21,7 @@ nami root
       ├── direct convolution/correlation
       └── later smoothing, peaks, and direct resampling
 
-nami.spectral (later, explicitly imported)
+nami.spectral (explicitly imported)
   └── ShuhaFFT adapter
       ├── spectra
       └── STFT
@@ -32,10 +32,16 @@ ShuhaFFT is absent. A spectral module may import ShuhaFFT, but the root and all
 elementary modules must never import the spectral layer. This one-way boundary
 is tested before a spectral API can merge.
 
-The current direct convolution is an I/O- and FFT-independent scalar kernel.
-Its `signal` and `kernel` roles control SAME and VALID output shapes; later
-optimized kernels must preserve those shape, validation, ownership, and
-finite-result semantics.
+The direct convolution is an I/O- and FFT-independent native-SIMD kernel with a
+scalar tail and a private scalar differential reference. Its `signal` and
+`kernel` roles control SAME and VALID output shapes. SIMD pointer access is
+limited to validated, rounded-down contiguous chunks and is covered by tail,
+mode, and overflow differential tests.
+
+Peak analysis builds reusable nearest-greater and range-minimum indexes. The
+owning `find_peaks` wrapper is the simple path; `find_peaks_into` accepts a
+caller-owned `Peaks` result and `PeakWorkspace` for repeated batch work. One
+workspace is used by only one worker at a time.
 
 The package root exports only the small documented public surface. Algorithms,
 generated tables, platform details, and backend implementations remain in

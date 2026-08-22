@@ -4,19 +4,29 @@
 
 Scientific signal processing for Mojo.
 
-## Scope
+## Install
 
-Nami provides scientific signal-processing algorithms and delegates Fourier transforms to ShuhaFFT instead of embedding an FFT implementation.
+For an existing Pixi project, add Nami's package channel to `pixi.toml`:
 
-The v0.1 work is deliberately staged: dependency-free windows first, direct
-convolution and correlation second, and stabilization of that elementary API
-third. The small spectral API keeps its FFT-dependent imports isolated under
-`nami.spectral`. The project is independently installable and does not require
-any application from the wider ecosystem.
+```toml
+[workspace]
+channels = [
+    "https://ameyanagi.github.io/mojo-channel",
+    # Keep your project's other channels here.
+]
+```
 
-## Development
+Then add the package:
 
-Install [Pixi](https://pixi.sh/), then run:
+```sh
+pixi add mojo-nami
+```
+
+The `mojo-nami` package declares `mojo-shuhafft` as a runtime dependency from
+the same channel, so `nami.spectral` is available without a separate install.
+
+To work from a source checkout, install the locked environment and run its
+validation and example tasks:
 
 ```sh
 pixi install --locked
@@ -24,19 +34,13 @@ pixi run check
 pixi run example
 ```
 
-The exact stable Mojo compiler and all development dependencies are captured in
-`pixi.lock`. Runtime and library code is Mojo-first and pure Mojo wherever
-practical. Build-time data generation may use another language when justified,
-but generated outputs must be deterministic, checksum-pinned, licensed, and
-documented.
+Run your own Mojo file against the checkout with the full command:
 
-## Package
+```sh
+pixi run mojo run -I src your_file.mojo
+```
 
-The Mojo import is `nami`. The eventual Conda distribution is
-`mojo-nami`. Source lives under `src/nami/`, whose
-`__init__.mojo` defines the package boundary.
-
-## Quickstart: detrend, Welch PSD, and peak finding
+## Quickstart
 
 This weekly workflow turns uniformly sampled measurements into a one-sided
 power spectral density, then locates prominent spectral lines:
@@ -74,35 +78,62 @@ def main() raises:
 
 The default linear detrend removes the drift; Welch and `find_peaks` then find
 the 50 Hz line and its 175 Hz companion. Run the complete example with
-`mojo run -I src examples/spectral_workflow.mojo` in an environment where the
-`mojo-shuhafft` package is installed. Welch segment lengths must be powers of
-two while ShuhaFFT is radix-2 only. `nami.spectral` requires `mojo-shuhafft`,
-while importing the elementary `nami` root remains dependency-free.
+`pixi run mojo run -I src examples/spectral_workflow.mojo` (the pixi environment
+already includes `mojo-shuhafft`).
+
+ShuhaFFT supports arbitrary-length complex transforms through Bluestein's
+algorithm, but its compact reusable `RealFFTPlan` remains radix-2. Nami's
+real-signal spectral APIs use that plan, so `periodogram` requires the whole
+signal length to be a power of two, while `welch` and `spectrogram` require a
+power-of-two `segment_length`; all FFT lengths must be at least two.
+Invalid-length errors report the supplied length and suggest the nearest valid
+length or lengths.
+
+## What's in the box
+
+- [`hann`, `hamming`, `blackman`, `nuttall`, `blackman_harris`, `flattop`, and
+  `general_cosine`](docs/windows.md) create `Float64` windows;
+  `WindowSampling` and `WindowNormalization` control their conventions.
+- [`convolve` and `correlate`](docs/convolution.md) perform direct linear
+  operations, with output shape selected by `ConvolutionMode`.
+- [`detrend`](docs/detrend.md) removes a constant or linear trend selected by
+  `DetrendKind`.
+- [`savgol_filter` and `savgol_coefficients`](docs/savgol.md) provide
+  Savitzky–Golay smoothing and coefficient generation.
+- [`find_peaks`](docs/peaks.md) locates and filters local maxima and returns
+  complete prominence/width metadata; `find_peaks_into` reuses caller-owned
+  `Peaks` and `PeakWorkspace` storage for repeated analysis.
+- [`periodogram`, `welch`, and `spectrogram`](docs/spectral.md), imported from
+  `nami.spectral`, estimate one-sided power spectral density. `spectrogram`
+  returns borrowed coordinates plus a contiguous frame-major power matrix.
 
 ## Window functions
 
 The first usable slice provides arbitrary-term `Float64` general-cosine windows
-plus Hann, Hamming, and three-term Blackman wrappers without ShuhaFFT or another
-runtime dependency:
+plus the named window wrappers without requiring callers to work with the
+underlying coefficients:
 
 ```mojo
 from nami import WindowNormalization, WindowSampling, general_cosine, hann
 from std.collections import List
 
-var analysis = hann(1024, WindowSampling.PERIODIC)
-var nuttall_coefficients: List[Float64] = [
-    0.3635819, 0.4891775, 0.1365995, 0.0106411
-]
-var nuttall = general_cosine(
-    1024,
-    nuttall_coefficients,
-    WindowSampling.PERIODIC,
-)
-var filter_design = hann(
-    1024,
-    WindowSampling.SYMMETRIC,
-    WindowNormalization.PEAK,
-)
+
+def main() raises:
+    var analysis = hann(1024, WindowSampling.PERIODIC)
+    var nuttall_coefficients: List[Float64] = [
+        0.3635819, 0.4891775, 0.1365995, 0.0106411
+    ]
+    var nuttall = general_cosine(
+        1024,
+        nuttall_coefficients,
+        WindowSampling.PERIODIC,
+    )
+    var filter_design = hann(
+        1024,
+        WindowSampling.SYMMETRIC,
+        WindowNormalization.PEAK,
+    )
+    print("window lengths:", len(analysis), len(nuttall), len(filter_design))
 ```
 
 `SYMMETRIC` includes both interval endpoints. `PERIODIC` omits the repeated
@@ -120,32 +151,47 @@ convolution:
 
 ```mojo
 from nami import ConvolutionMode, convolve
+from std.collections import List
 
-var full = convolve([1.0, 2.0, 3.0], [4.0, 5.0])
-var same = convolve(
-    [1.0, 2.0, 3.0],
-    [4.0, 5.0],
-    ConvolutionMode.SAME,
-)
+
+def main() raises:
+    var signal: List[Float64] = [1.0, 2.0, 3.0]
+    var kernel: List[Float64] = [4.0, 5.0]
+    var full = convolve(signal, kernel)
+    var same = convolve(signal, kernel, ConvolutionMode.SAME)
+    print("full:", full, "same:", same)
 ```
 
 FULL is the default. SAME returns the first input's length and left-centers an
 even-length kernel. VALID requires the kernel to be no longer than the first
 input. Inputs must be non-empty and finite, and arithmetic that produces a
-nonfinite sample raises. See [the convolution contract](docs/convolution.md).
+nonfinite sample raises. See
+[the convolution contract](docs/convolution.md).
+
+## Scope and package
+
+Nami provides scientific signal-processing algorithms and delegates Fourier
+transforms to ShuhaFFT instead of embedding an FFT implementation. Its
+dependency-free elementary API is exported from `nami`, while FFT-dependent
+imports stay isolated under `nami.spectral`.
+
+The Mojo import is `nami`, the Conda distribution is `mojo-nami`, and source
+lives under `src/nami/`. The project is independently installable and does not
+require an application from the wider ecosystem.
 
 ## Repository map
 
-- `src/nami/`: library or application source
+- `src/nami/`: library source
 - `tests/`: TestSuite unit, reference-value, and invariant tests
 - `examples/`: small compilable usage programs
-- `benchmarks/`: reproducible methodology and later benchmark programs
+- `benchmarks/`: reproducible methodology and benchmark programs
 - `docs/`: architecture, design, compatibility, roadmap, and release policy
 - `conda.recipe/`: local Rattler build recipe
 
 See [the architecture](docs/architecture.md), [design principles](docs/design.md),
-the [spectral contract](docs/spectral.md), and [roadmap](docs/roadmap.md) before
-proposing a new dependency or feature.
+[compatibility policy](docs/compatibility.md), and [roadmap](docs/roadmap.md)
+before proposing a new dependency or feature. The contract for every public
+operation is linked from [What's in the box](#whats-in-the-box).
 
 ## License
 

@@ -107,16 +107,22 @@ def test_full_output_index_encodes_positive_impulse_lag() raises:
 def test_empty_inputs_are_rejected() raises:
     var empty = List[Float64]()
     var value: List[Float64] = [1.0]
-    with assert_raises(contains="convolution inputs must be non-empty"):
+    with assert_raises(
+        contains="convolution signal must be non-empty; got signal_length=0"
+    ):
         _ = correlate(empty, value)
-    with assert_raises(contains="convolution inputs must be non-empty"):
+    with assert_raises(
+        contains="convolution kernel must be non-empty; got kernel_length=0"
+    ):
         _ = correlate(value, empty)
 
 
 def test_nonfinite_input_is_rejected() raises:
     var finite: List[Float64] = [1.0, 2.0]
     var nonfinite: List[Float64] = [Float64("nan")]
-    with assert_raises(contains="inputs must contain only finite values"):
+    with assert_raises(
+        contains="convolution kernel must contain only finite values; got kernel[0]=nan"
+    ):
         _ = correlate(finite, nonfinite)
 
 

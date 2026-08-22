@@ -1,4 +1,12 @@
-from nami import ConvolutionMode, WindowSampling, convolve, hann
+from nami import (
+    ConvolutionMode,
+    PeakWorkspace,
+    Peaks,
+    WindowSampling,
+    convolve,
+    find_peaks_into,
+    hann,
+)
 from std.testing import assert_equal, assert_true
 
 
@@ -11,3 +19,7 @@ def main() raises:
     var filtered = convolve(signal, kernel, ConvolutionMode.VALID)
     assert_equal(len(filtered), 2)
     assert_true(abs(filtered[0] - 3.0) <= 1e-12)
+    var peaks = Peaks()
+    var workspace = PeakWorkspace()
+    find_peaks_into(signal, peaks, workspace)
+    assert_equal(len(peaks), 0)

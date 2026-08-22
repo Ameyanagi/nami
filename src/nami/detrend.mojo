@@ -23,7 +23,15 @@ struct DetrendKind(Copyable, Equatable, ImplicitlyCopyable, Writable):
     def validate(self) raises:
         """Raise if unusual direct field mutation broke the kind invariant."""
         if self != Self.CONSTANT and self != Self.LINEAR:
-            raise Error("invalid detrend kind")
+            raise Error(
+                String(
+                    (
+                        "DetrendKind _value must be 0 (CONSTANT) or 1 (LINEAR); "
+                        "got _value="
+                    ),
+                    self._value,
+                )
+            )
 
     def __eq__(self, other: Self) -> Bool:
         return self._value == other._value
@@ -52,12 +60,19 @@ def detrend(
     The input must be non-empty and contain only finite values.
     """
     if len(signal) == 0:
-        raise Error("detrend input must be non-empty")
+        raise Error("detrend signal must be non-empty; got signal_length=0")
 
     var mean_x = 0.0
     for index in range(len(signal)):
         if not isfinite(signal[index]):
-            raise Error("detrend input must contain only finite values")
+            raise Error(
+                String(
+                    "detrend signal must contain only finite values; got signal[",
+                    index,
+                    "]=",
+                    signal[index],
+                )
+            )
         mean_x += signal[index]
     mean_x /= Float64(len(signal))
 

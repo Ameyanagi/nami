@@ -205,13 +205,23 @@ def test_peak_normalization_rescales_even_symmetric_window() raises:
 
 def test_length_two_hann_rejects_peak_normalization() raises:
     assert_values_near(hann(2), [0.0, 0.0])
-    with assert_raises(contains="cannot peak-normalize a numerically zero window"):
+    with assert_raises(
+        contains=(
+            "window peak normalization requires a sample with |value| > 1e-15; "
+            "got max_abs="
+        )
+    ):
         _ = hann(2, normalization=WindowNormalization.PEAK)
 
 
 def test_length_two_blackman_rejects_roundoff_amplification() raises:
     assert_values_near(blackman(2), [0.0, 0.0])
-    with assert_raises(contains="cannot peak-normalize a numerically zero window"):
+    with assert_raises(
+        contains=(
+            "window peak normalization requires a sample with |value| > 1e-15; "
+            "got max_abs="
+        )
+    ):
         _ = blackman(2, normalization=WindowNormalization.PEAK)
 
 
@@ -229,8 +239,13 @@ def test_empty_and_singleton_contract() raises:
 
 
 def test_negative_length_rejected() raises:
-    with assert_raises(contains="window length must be non-negative"):
+    with assert_raises(contains="hann length must be non-negative; got length=-1"):
         _ = hann(-1)
+    var coefficients: List[Float64] = [0.5, 0.5]
+    with assert_raises(
+        contains="general_cosine length must be non-negative; got length=-2"
+    ):
+        _ = general_cosine(-2, coefficients)
 
 
 def test_window_mode_constants_are_distinct() raises:
@@ -248,12 +263,20 @@ def test_window_modes_write_constant_names() raises:
 def test_explicit_window_mode_validation_rejects_corrupted_storage() raises:
     var sampling = WindowSampling.SYMMETRIC
     sampling._value = 2
-    with assert_raises(contains="invalid window sampling"):
+    with assert_raises(
+        contains=(
+            "WindowSampling _value must be 0 (SYMMETRIC) or 1 (PERIODIC); got _value=2"
+        )
+    ):
         sampling.validate()
 
     var normalization = WindowNormalization.FORMULA
     normalization._value = 2
-    with assert_raises(contains="invalid window normalization"):
+    with assert_raises(
+        contains=(
+            "WindowNormalization _value must be 0 (FORMULA) or 1 (PEAK); got _value=2"
+        )
+    ):
         normalization.validate()
 
 

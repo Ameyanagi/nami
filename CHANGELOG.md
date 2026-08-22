@@ -13,6 +13,10 @@ and uses semantic versioning after the first public release.
   or peak normalization.
 - Dependency-free direct `Float64` convolution with explicit FULL, SAME, and
   VALID shape, finite-data, overflow, and ownership semantics.
+- Complete peak heights, prominence bases, widths, width heights, and
+  interpolated intersections, plus allocation-reusing `find_peaks_into` and
+  `PeakWorkspace` APIs.
+- A compiled p50/p95 analysis benchmark and reusable peak-analysis example.
 
 ### Changed
 
@@ -20,3 +24,9 @@ and uses semantic versioning after the first public release.
   `ConvolutionMode`, `WindowSampling`, and `WindowNormalization` constants.
 - Replaced the hardcoded two-pi literal and finite-value helper with Mojo 1.0
   standard-library math APIs.
+- Replaced quadratic peak distance selection and repeated prominence scans with
+  heap priority, neighborhood pruning, and reusable nearest-greater/range-
+  minimum indexes.
+- Vectorized direct convolution across complete native-width kernel chunks,
+  retaining scalar tails, per-result finite checks, and a differential scalar
+  reference.
