@@ -2,28 +2,52 @@
 
 set -euo pipefail
 
-violations=$(
-  grep -RnE \
-    '^[[:space:]]*(from[[:space:]]+shuhafft|import[[:space:]]+shuhafft|from[[:space:]]+[.]+spectral|from[[:space:]]+nami[.]spectral)' \
-    src/nami \
-    --include='*.mojo' \
-    --exclude-dir=spectral || true
-)
+source_root=${1:-src/nami}
+grep_bin=${GREP_BIN:-grep}
+forbidden_import_pattern='^[[:space:]]*((from|import)[[:space:]]+(shuhafft|[.]+spectral|nami[.]spectral)([.[:space:]]|$)|from[[:space:]]+([.]+|nami)[[:space:]]+import[[:space:]].*spectral)'
+shuhafft_import_pattern='^[[:space:]]*(from|import)[[:space:]]+shuhafft([.[:space:]]|$)'
 
-if [[ -n "$violations" ]]; then
+if [[ ! -d "$source_root" ]]; then
+  echo "Nami source root does not exist or is not a directory: $source_root" >&2
+  exit 2
+fi
+
+set +e
+violations=$(
+  "$grep_bin" -RnE \
+    --include='*.mojo' \
+    --exclude-dir=spectral \
+    "$forbidden_import_pattern" \
+    "$source_root"
+)
+violation_status=$?
+set -e
+
+if [[ $violation_status -gt 1 ]]; then
+  echo "elementary import scan failed with status $violation_status" >&2
+  exit "$violation_status"
+fi
+
+if [[ $violation_status -eq 0 ]]; then
   echo "elementary Nami modules must not import ShuhaFFT or nami.spectral:" >&2
   echo "$violations" >&2
   exit 1
 fi
 
-spectral_imports=$(
-  grep -RlE \
-    '^[[:space:]]*(from[[:space:]]+shuhafft|import[[:space:]]+shuhafft)' \
-    src/nami/spectral \
-    --include='*.mojo' || true
-)
+set +e
+"$grep_bin" -RlE \
+  --include='*.mojo' \
+  "$shuhafft_import_pattern" \
+  "$source_root/spectral" >/dev/null
+spectral_status=$?
+set -e
 
-if [[ -z "$spectral_imports" ]]; then
+if [[ $spectral_status -gt 1 ]]; then
+  echo "spectral adapter import scan failed with status $spectral_status" >&2
+  exit "$spectral_status"
+fi
+
+if [[ $spectral_status -eq 1 ]]; then
   echo "nami.spectral must retain an explicit ShuhaFFT adapter import" >&2
   exit 1
 fi
