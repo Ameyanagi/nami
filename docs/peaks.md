@@ -45,7 +45,9 @@ peak already removed by a higher-priority peak cannot remove any other peak.
 Prominence uses the full signal as `scipy.signal.peak_prominences` does without
 `wlen`. From the peak, each side extends to the nearest sample that is strictly
 higher than the peak or to the signal edge. The minimum sample in each of those
-left and right intervals is the side's base. Prominence is
+left and right intervals is the side's base. Nami constructs nearest-greater
+neighbors and a range-minimum index once per call, so it does not rescan the
+whole signal for every peak. Prominence is
 
 ```text
 signal[peak] - max(left_minimum, right_minimum)
@@ -55,8 +57,7 @@ Samples equal to the peak height do not stop the search. Prominences are always
 computed for every peak that survives height and distance, even when
 prominence bounds are absent. The base index changes only for a strictly lower
 sample, so if an interval minimum occurs more than once, the occurrence closest
-to the peak is retained. Each retained prominence remains parallel to its
-retained index in the returned `Peaks`.
+to the peak is retained.
 
 Width follows `scipy.signal.peak_widths` at the requested `rel_height`, which
 defaults to `0.5`. Its evaluation height is
@@ -65,12 +66,21 @@ defaults to `0.5`. Its evaluation height is
 signal[peak] - prominence * rel_height
 ```
 
-Starting at the peak, each side walks toward the base recorded by the
-prominence calculation until reaching the evaluation height or that base. If
-the crossing falls between samples, its intersection point is linearly
-interpolated. Width is the right intersection point minus the left intersection
-point. Widths are computed only when `min_width` or `max_width` is supplied.
-They are a selection criterion only and are not stored on `Peaks`.
+Starting at the peak, each side searches the range-minimum index toward the
+base recorded by the prominence calculation until reaching the evaluation
+height or that base. If the crossing falls between samples, its intersection
+point is linearly interpolated. Width is the right intersection point minus the
+left intersection point.
+
+Widths and all related metadata are computed and stored for every returned
+peak, even when no width filter is supplied. The borrowed parallel accessors
+are:
+
+- `indices()` and `heights()`;
+- `prominences()`, `left_bases()`, and `right_bases()`;
+- `widths()`, `width_heights()`, `left_ips()`, and `right_ips()`.
+
+This makes one peak pass sufficient for filtering, annotation, and plotting.
 
 ## Errors and invariants
 
@@ -83,17 +93,31 @@ They are a selection criterion only and are not stored on `Peaks`.
   and supplied value;
 - a non-finite or negative `rel_height`, reporting the supplied value.
 
-`Peaks.indices()` and `Peaks.prominences()` return non-raising borrowed spans,
-and `len(peaks)` returns the number of indices. The two owning lists must have
-equal lengths. Construction validates this invariant; direct mutation of the
-underscore-prefixed storage is out of contract, and `validate()` provides an
-explicit checkpoint after unusual mutation.
+Every `Peaks` accessor returns a non-raising borrowed span and `len(peaks)`
+returns the shared parallel length. Construction validates that all metadata
+lists match. Direct mutation of underscore-prefixed storage is out of contract,
+and `validate()` provides an explicit checkpoint after unusual mutation.
 
-## Allocation
+## Reusable batch API
 
-The input span is borrowed and preserved. Peak discovery, stable distance
-ordering, removal state, and filtering use temporary lists proportional to the
-number of candidate peaks. The result owns one list of indices and one parallel
-list of `Float64` prominences. Requested widths are calculated as scalars during
-filtering and do not add result storage. No output sample buffer or copy of the
-input signal is allocated.
+`find_peaks` is the simple owning convenience API. Repeated analysis can retain
+both output and scratch storage:
+
+```mojo
+from nami import PeakWorkspace, Peaks, find_peaks_into
+
+var output = Peaks()
+var workspace = PeakWorkspace()
+find_peaks_into(samples, output, workspace, min_prominence=0.25)
+```
+
+`find_peaks_into` validates before clearing output, borrows and preserves the
+input, and reuses capacities retained by both values. A workspace is mutable,
+not thread-safe, and must not be shared by concurrent calls. Use one workspace
+per concurrent worker.
+
+Distance priority is heap-ordered in `O(P log P)` for `P` candidate peaks.
+Prominence and width indexes take `O(N)` construction storage and each selected
+peak uses logarithmic range queries. The previous pairwise distance pass was
+quadratic in `P`; the previous prominence calculation could rescan `N` samples
+for every peak.

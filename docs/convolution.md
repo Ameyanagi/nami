@@ -28,9 +28,18 @@ and the second as the kernel rather than silently swapping their roles.
   out of contract; `validate()` provides an explicit invariant checkpoint.
 - The inputs are preserved and a new owning `List[Float64]` is returned.
 
-The initial implementation materializes the full result before selecting SAME
-or VALID. This establishes one deterministic numerical contract before later
-work measures whether mode-specific allocation or SIMD kernels are warranted.
+The direct kernel accumulates complete native-SIMD-width kernel chunks into
+contiguous output chunks, followed by a scalar tail. Accumulation still visits
+signal samples in increasing order, preserving the scalar reference's update
+order for every output element. Each vector result is checked for finiteness;
+the failing output index is reported exactly as on the scalar tail. The full
+result is materialized before selecting SAME or VALID.
+
+The unsafe loads and stores form a narrow internal boundary: validation has
+already established non-empty live spans, vector bounds are rounded down to a
+complete native width, and the full output has length `N + M - 1`. Differential
+tests compare chunks and tails against the retained scalar reference and cover
+overflow on the vector path.
 
 ## Correlation
 

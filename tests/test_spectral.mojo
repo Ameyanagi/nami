@@ -1,5 +1,11 @@
 from nami import detrend, find_peaks
-from nami.spectral import PowerSpectrum, periodogram, welch
+from nami.spectral import (
+    PowerSpectrum,
+    Spectrogram,
+    periodogram,
+    spectrogram,
+    welch,
+)
 from std.collections import List
 from std.math import pi, sin
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -433,6 +439,162 @@ def test_power_spectrum_constructor_rejects_parallel_length_mismatch() raises:
     var power: List[Float64] = [0.25]
     with assert_raises(contains="got frequencies=2, power=1"):
         _ = PowerSpectrum(_frequencies=frequencies^, _power=power^)
+
+
+def test_spectrogram_matches_direct_dft_oracle_and_frame_coordinates() raises:
+    var signal: List[Float64] = [
+        0.0,
+        1.0,
+        0.0,
+        -1.0,
+        1.0,
+        0.0,
+        -1.0,
+        0.0,
+        0.5,
+        -0.5,
+        0.5,
+        -0.5,
+    ]
+    var result = spectrogram(
+        signal,
+        8.0,
+        segment_length=8,
+        overlap=4,
+    )
+    assert_equal(result.frame_count(), 2)
+    assert_equal(result.bin_count(), 5)
+
+    var times = result.times()
+    assert_equal(len(times), 2)
+    assert_equal(times[0], 0.5)
+    assert_equal(times[1], 1.0)
+
+    var frequencies = result.frequencies()
+    assert_equal(len(frequencies), 5)
+    for index in range(5):
+        assert_equal(frequencies[index], Float64(index))
+
+    # Independent periodic-Hann, constant-detrended direct-DFT oracle. Rows
+    # are frames and columns are DC through Nyquist.
+    var expected: List[Float64] = [
+        0.0017872174505605205,
+        0.007148869802242077,
+        0.27083333333333337,
+        0.3261844635310912,
+        0.06071278254943947,
+        0.002604166666666666,
+        0.018305826175840773,
+        0.057291666666666644,
+        0.1483608404908259,
+        0.023437500000000007,
+    ]
+    assert_power_near(result.power(), expected)
+
+
+def test_spectrogram_frame_mean_matches_welch_policy() raises:
+    var signal = synthesize(512)
+    var frames = spectrogram(signal, 800.0, segment_length=256)
+    var averaged = welch(signal, 800.0, segment_length=256)
+    assert_equal(frames.frame_count(), 3)
+    assert_equal(frames.bin_count(), len(averaged))
+
+    var frame_power = frames.power()
+    var averaged_power = averaged.power()
+    for bin_index in range(frames.bin_count()):
+        var total = 0.0
+        for frame_index in range(frames.frame_count()):
+            total += frame_power[frame_index * frames.bin_count() + bin_index]
+        assert_power_value_near(
+            total / Float64(frames.frame_count()), averaged_power[bin_index]
+        )
+
+
+def test_spectrogram_errors_name_invalid_configuration() raises:
+    var short = List[Float64](length=7, fill=0.0)
+    with assert_raises(contains="signal_length=7, segment_length=8"):
+        _ = spectrogram(short, segment_length=8)
+
+    var signal = List[Float64](length=8, fill=0.0)
+    with assert_raises(contains="overlap=8, segment_length=8"):
+        _ = spectrogram(signal, segment_length=8, overlap=8)
+    with assert_raises(contains="nearest are 4 and 8"):
+        _ = spectrogram(signal, segment_length=6)
+    signal[3] = Float64("nan")
+    with assert_raises(contains="got signal[3]=nan"):
+        _ = spectrogram(signal, segment_length=8)
+
+
+def test_spectrogram_value_contract() raises:
+    var times: List[Float64] = [0.5]
+    var frequencies: List[Float64] = [0.0, 1.0]
+    var power: List[Float64] = [0.25, 0.5]
+    var result = Spectrogram(
+        _times=times^,
+        _frequencies=frequencies^,
+        _power=power^,
+        _frame_count=1,
+        _bin_count=2,
+    )
+    assert_equal(result.frame_count(), 1)
+    assert_equal(result.bin_count(), 2)
+    assert_equal(result.power()[1], 0.5)
+    assert_equal(
+        String(result),
+        "Spectrogram(frames=1, bins=2, layout=frame-major, one_sided_density=True)",
+    )
+
+    var equal_times: List[Float64] = [0.5]
+    var equal_frequencies: List[Float64] = [0.0, 1.0]
+    var equal_power: List[Float64] = [0.25, 0.5]
+    var equal = Spectrogram(
+        _times=equal_times^,
+        _frequencies=equal_frequencies^,
+        _power=equal_power^,
+        _frame_count=1,
+        _bin_count=2,
+    )
+    assert_true(result == equal)
+
+    result._power.append(0.75)
+    with assert_raises(contains="power=3"):
+        result.validate()
+
+
+def test_spectrogram_constructor_rejects_shape_mismatch() raises:
+    var times: List[Float64] = [0.5]
+    var frequencies: List[Float64] = [0.0, 1.0]
+    var power: List[Float64] = [0.25]
+    with assert_raises(contains="expected_power=2"):
+        _ = Spectrogram(
+            _times=times^,
+            _frequencies=frequencies^,
+            _power=power^,
+            _frame_count=1,
+            _bin_count=2,
+        )
+
+
+def test_spectrogram_validation_rejects_dimension_product_overflow() raises:
+    var times: List[Float64] = [0.5]
+    var frequencies: List[Float64] = [0.0]
+    var power: List[Float64] = [0.25]
+    var result = Spectrogram(
+        _times=times^,
+        _frequencies=frequencies^,
+        _power=power^,
+        _frame_count=1,
+        _bin_count=1,
+    )
+    result._frame_count = Int.MAX
+    result._bin_count = 2
+    with assert_raises(
+        contains=(
+            "Spectrogram power dimensions overflow Int; got "
+            "frame_count=9223372036854775807, bin_count=2"
+        )
+    ):
+        result.validate()
 
 
 def main() raises:

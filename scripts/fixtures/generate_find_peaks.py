@@ -35,6 +35,18 @@ def report(label: str, **kwargs) -> None:
     print(f"{label} prominences: {mojo_list(prominences)}")
     if "width" in kwargs:
         print(f"{label} widths: {mojo_list(properties['widths'])}")
+        for name in (
+            "peak_heights",
+            "left_bases",
+            "right_bases",
+            "width_heights",
+            "left_ips",
+            "right_ips",
+        ):
+            if name in properties:
+                values = properties[name]
+                formatter = mojo_int_list if name.endswith("bases") else mojo_list
+                print(f"{label} {name}: {formatter(values)}")
 
 
 def main() -> None:
@@ -58,6 +70,7 @@ def main() -> None:
         width=(1.0, 4.0),
     )
     report("width2.0_rel_height1.0", width=(2.0, None), rel_height=1.0)
+    report("width_all_rel_height0.0", width=(None, None), rel_height=0.0)
 
 
 if __name__ == "__main__":

@@ -81,11 +81,13 @@ the 50 Hz line and its 175 Hz companion. Run the complete example with
 `pixi run mojo run -I src examples/spectral_workflow.mojo` (the pixi environment
 already includes `mojo-shuhafft`).
 
-ShuhaFFT is currently radix-2 only. Consequently, `periodogram` requires the
-whole signal length to be a power of two, and `welch` requires a power-of-two
-`segment_length`; both lengths must be at least two. Arbitrary-length support
-through Bluestein's algorithm is on the roadmap. Invalid-length errors report
-the supplied length and suggest the nearest valid length or lengths.
+ShuhaFFT supports arbitrary-length complex transforms through Bluestein's
+algorithm, but its compact reusable `RealFFTPlan` remains radix-2. Nami's
+real-signal spectral APIs use that plan, so `periodogram` requires the whole
+signal length to be a power of two, while `welch` and `spectrogram` require a
+power-of-two `segment_length`; all FFT lengths must be at least two.
+Invalid-length errors report the supplied length and suggest the nearest valid
+length or lengths.
 
 ## What's in the box
 
@@ -98,10 +100,12 @@ the supplied length and suggest the nearest valid length or lengths.
   `DetrendKind`.
 - [`savgol_filter` and `savgol_coefficients`](docs/savgol.md) provide
   Savitzky–Golay smoothing and coefficient generation.
-- [`find_peaks`](docs/peaks.md) locates and filters local maxima and returns a
-  `Peaks` result.
-- [`periodogram` and `welch`](docs/spectral.md), imported from `nami.spectral`,
-  estimate one-sided power spectral density and return `PowerSpectrum` results.
+- [`find_peaks`](docs/peaks.md) locates and filters local maxima and returns
+  complete prominence/width metadata; `find_peaks_into` reuses caller-owned
+  `Peaks` and `PeakWorkspace` storage for repeated analysis.
+- [`periodogram`, `welch`, and `spectrogram`](docs/spectral.md), imported from
+  `nami.spectral`, estimate one-sided power spectral density. `spectrogram`
+  returns borrowed coordinates plus a contiguous frame-major power matrix.
 
 ## Window functions
 

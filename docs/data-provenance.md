@@ -31,8 +31,9 @@ redistributed by these fixtures.
 
 ### Peak finding
 
-The peak indices and prominences embedded in `tests/test_find_peaks.mojo` were
-generated on 2026-08-21 from
+The peak indices, heights, prominences, bases, widths, width heights, and
+intersection positions embedded in `tests/test_find_peaks.mojo` were
+generated on 2026-08-22 from
 [SciPy 1.16.1](https://github.com/scipy/scipy/tree/v1.16.1) and
 [NumPy 2.3.2](https://github.com/numpy/numpy/tree/v2.3.2) with:
 
@@ -42,8 +43,8 @@ uv run scripts/fixtures/generate_find_peaks.py
 
 The generator records the exact input and calls `scipy.signal.find_peaks` for
 the baseline; lower and upper height, prominence, and width bounds; distance;
-combined filters; and a non-default relative height. It prints the widths
-returned by SciPy whenever width is requested and calls
+combined filters; and relative heights `0.0`, `0.5`, and `1.0`. It prints all
+available width and base metadata returned by SciPy and calls
 `scipy.signal.peak_prominences` for every returned index. The committed values
 are computed numerical outputs, not copied SciPy or NumPy source code. SciPy
 and NumPy are BSD-3-Clause licensed; their code is not redistributed by these
@@ -67,7 +68,7 @@ both symmetric and periodic sampling, `scipy.signal.savgol_coeffs`, and
 generator. The committed values are computed numerical outputs; SciPy or NumPy
 source code is not redistributed.
 
-### Periodogram and Welch power spectral density
+### Periodogram, Welch, and spectrogram power spectral density
 
 The periodogram, Welch, and detrend-to-Welch workflow values embedded in
 `tests/test_spectral.mojo` were generated on 2026-08-21 from
@@ -83,6 +84,12 @@ script, so no input data is committed. It calls `scipy.signal.periodogram` and
 `scipy.signal.welch` with their curated default semantics, plus detrending and
 peak finding for the README workflow. The committed values are computed
 numerical outputs; SciPy or NumPy source code is not redistributed.
+
+The compact spectrogram fixture in `tests/test_spectral.mojo` was independently
+computed from the documented periodic-Hann formula and a direct complex DFT.
+The test also averages the frame-major result by frequency bin and compares it
+with Nami's independently exercised SciPy-backed Welch fixture, checking the
+shared window, detrend, overlap, scaling, and one-sided-bin policy.
 
 Every future generated artifact must record:
 

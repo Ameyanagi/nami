@@ -3,6 +3,7 @@
 from std.collections import List
 from std.io import Writable, Writer
 from std.math import isfinite
+from std.sys import simd_width_of
 
 
 struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable, Writable):
@@ -48,8 +49,10 @@ struct ConvolutionMode(Copyable, Equatable, ImplicitlyCopyable, Writable):
             writer.write("FULL")
         elif self == Self.SAME:
             writer.write("SAME")
-        else:
+        elif self == Self.VALID:
             writer.write("VALID")
+        else:
+            writer.write("INVALID(_value=", self._value, ")")
 
 
 def _full_output_length(signal_length: Int, kernel_length: Int) raises -> Int:
@@ -83,6 +86,7 @@ def _output_length(
     signal_length: Int, kernel_length: Int, mode: ConvolutionMode
 ) raises -> Int:
     """Return a validated output length for internal tests and allocation."""
+    mode.validate()
     var full_length = _full_output_length(signal_length, kernel_length)
     if mode == ConvolutionMode.SAME:
         return signal_length
@@ -133,12 +137,42 @@ def _convolve_core(
     kernel: Span[Float64, _],
     mode: ConvolutionMode,
 ) raises -> List[Float64]:
-    """Run validated direct convolution for the public entry points."""
+    """Run native-SIMD direct convolution for the public entry points."""
     var output_length = _output_length(len(signal), len(kernel), mode)
     var full_length = _full_output_length(len(signal), len(kernel))
     var full = List[Float64](length=full_length, fill=0.0)
+    comptime width = simd_width_of[DType.float64]()
+    var vector_end = len(kernel) - len(kernel) % width
+    # Safety: kernel chunks are rounded down to complete native widths. For a
+    # signal index i, the output chunk [i + k, i + k + width) ends no later
+    # than i + len(kernel), which is within the live full-convolution buffer.
+    # Both pointers remain local and neither input is mutated.
+    var kernel_ptr = kernel.unsafe_ptr()
+    var full_ptr = full.unsafe_ptr()
     for signal_index in range(len(signal)):
-        for kernel_index in range(len(kernel)):
+        var signal_value = SIMD[DType.float64, width](signal[signal_index])
+        for kernel_index in range(0, vector_end, width):
+            var output_index = signal_index + kernel_index
+            var updated = full_ptr.unsafe_load[width=width](output_index) + (
+                signal_value * kernel_ptr.unsafe_load[width=width](kernel_index)
+            )
+            var finite_mask = isfinite(updated)
+            if finite_mask != SIMD[DType.bool, width](fill=True):
+                for lane in range(width):
+                    if not finite_mask[lane]:
+                        raise Error(
+                            String(
+                                (
+                                    "convolution result must contain only finite "
+                                    "values; got output["
+                                ),
+                                output_index + lane,
+                                "]=",
+                                updated[lane],
+                            )
+                        )
+            full_ptr.unsafe_store[width=width](output_index, updated)
+        for kernel_index in range(vector_end, len(kernel)):
             var output_index = signal_index + kernel_index
             var updated = (
                 full[output_index] + signal[signal_index] * kernel[kernel_index]
@@ -166,6 +200,43 @@ def _convolve_core(
     return output^
 
 
+def _convolve_core_scalar(
+    signal: Span[Float64, _],
+    kernel: Span[Float64, _],
+    mode: ConvolutionMode,
+) raises -> List[Float64]:
+    """Scalar semantic reference retained for SIMD differential tests."""
+    var output_length = _output_length(len(signal), len(kernel), mode)
+    var full_length = _full_output_length(len(signal), len(kernel))
+    var full = List[Float64](length=full_length, fill=0.0)
+    for signal_index in range(len(signal)):
+        for kernel_index in range(len(kernel)):
+            var output_index = signal_index + kernel_index
+            var updated = (
+                full[output_index] + signal[signal_index] * kernel[kernel_index]
+            )
+            if not isfinite(updated):
+                raise Error(
+                    String(
+                        (
+                            "convolution result must contain only finite values; "
+                            "got output["
+                        ),
+                        output_index,
+                        "]=",
+                        updated,
+                    )
+                )
+            full[output_index] = updated
+    var start = _output_start(len(kernel), mode)
+    if start == 0 and output_length == full_length:
+        return full^
+    var output = List[Float64](capacity=output_length)
+    for index in range(output_length):
+        output.append(full[start + index])
+    return output^
+
+
 def convolve(
     signal: Span[Float64, _],
     kernel: Span[Float64, _],
@@ -179,6 +250,7 @@ def convolve(
     kernel to be no longer than the signal. Arithmetic overflow raises instead
     of returning a non-finite sample. Inputs are preserved.
     """
+    mode.validate()
     _validate_finite(signal, argument="signal")
     _validate_finite(kernel, argument="kernel")
     return _convolve_core(signal, kernel, mode)
@@ -200,6 +272,7 @@ def correlate(
     longer than the signal, and output-length or arithmetic overflow raises.
     Inputs are preserved.
     """
+    mode.validate()
     _validate_finite(signal, argument="signal")
     _validate_finite(kernel, argument="kernel")
     var reversed_kernel = List[Float64](capacity=len(kernel))

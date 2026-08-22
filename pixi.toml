@@ -10,6 +10,7 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.0.0"
 
 [tasks]
+bench = { cmd = "mojo build -I src -O3 benchmarks/bench_analysis.mojo -o .pixi/bench_analysis && ./.pixi/bench_analysis", description = "Run compiled p50/p95 signal-analysis benchmarks" }
 check = { depends-on = ["format-check", "test", "precompile", "readme-check"], description = "Run the complete validation suite" }
 example = { cmd = "mojo run -I src examples/basic.mojo", description = "Run the elementary signal-processing example" }
 format = { cmd = "bash scripts/format.sh", description = "Format Mojo source files" }

@@ -2,6 +2,7 @@
 
 from shuhafft import FFTNormalization, RealFFTPlan
 from std.collections import List, Optional
+from std.complex import ComplexSIMD
 from std.io import Writable, Writer
 from std.math import isfinite
 
@@ -177,9 +178,9 @@ def welch(
     Complete segments use a periodic Hann window, per-segment constant
     detrending, mean averaging, and half overlap by default. One real FFT plan
     and its tables are allocated once and reused. The operation preserves the
-    input and allocates the window and result lists once, plus detrended,
-    windowed, and compact FFT lists for each segment. Committed SciPy fixtures
-    use mixed absolute/relative tolerance
+    input and allocates the window, accumulated result, real frame, and compact
+    spectrum lists once. The frame and spectrum buffers are reused for every
+    segment. Committed SciPy fixtures use mixed absolute/relative tolerance
     `max(1e-9, 1e-9 * abs(expected))`.
     """
     _validate_sample_rate(sample_rate)
@@ -218,19 +219,22 @@ def welch(
     var bin_count = segment_length // 2 + 1
     var accumulated = List[Float64](length=bin_count, fill=0.0)
     var plan = RealFFTPlan[DType.float64](segment_length, FFTNormalization.BACKWARD)
+    var frame = List[Float64](length=segment_length, fill=0.0)
+    var spectrum = List[ComplexSIMD[DType.float64, 1]](
+        length=bin_count, fill=ComplexSIMD[DType.float64, 1](0.0)
+    )
 
     for segment_index in range(segment_count):
         var start = segment_index * step
-        var centered = detrend(
-            signal[start : start + segment_length],
-            DetrendKind.CONSTANT,
-        )
-        var windowed = List[Float64](capacity=segment_length)
+        var mean = 0.0
         for index in range(segment_length):
-            windowed.append(centered[index] * window[index])
-        var transformed = plan.forward(windowed)
+            mean += signal[start + index]
+        mean /= Float64(segment_length)
+        for index in range(segment_length):
+            frame[index] = (signal[start + index] - mean) * window[index]
+        plan.forward_into(frame, spectrum)
         for index in range(bin_count):
-            var value = transformed[index]
+            var value = spectrum[index]
             accumulated[index] += scale * (value.re * value.re + value.im * value.im)
 
     var inverse_segment_count = 1.0 / Float64(segment_count)
