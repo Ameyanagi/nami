@@ -16,10 +16,11 @@ install an application, renderer, language layer, or scientific stack.
 
 ```text
 nami root
-  └── dependency-free public exports
+  └── source-layer dependency-free public exports
       ├── windows
       ├── direct convolution/correlation
-      └── later smoothing, peaks, and direct resampling
+      ├── detrending and smoothing
+      └── peak analysis
 
 nami.spectral (explicitly imported)
   └── ShuhaFFT adapter
@@ -27,10 +28,12 @@ nami.spectral (explicitly imported)
       └── STFT
 ```
 
-The root package must compile and its elementary test lane must pass when
-ShuhaFFT is absent. A spectral module may import ShuhaFFT, but the root and all
-elementary modules must never import the spectral layer. This one-way boundary
-is tested before a spectral API can merge.
+The published distribution installs ShuhaFFT because `nami.spectral` ships in
+the same package, so the single locked CI workspace does not claim an
+absent-ShuhaFFT solve. Source layering remains strict: only files below
+`src/nami/spectral/` may import ShuhaFFT, and the root and elementary modules
+must never import the spectral layer. `scripts/check-layering.sh` enforces this
+one-way boundary in every `pixi run check` lane.
 
 The direct convolution is an I/O- and FFT-independent native-SIMD kernel with a
 scalar tail and a private scalar differential reference. Its `signal` and
