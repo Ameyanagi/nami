@@ -1,24 +1,19 @@
 # Nami
 
-> **Experimental — API not yet released.**
+> **v0.1.0 — experimental API.**
 
 Scientific signal processing for Mojo.
 
 ## Install
 
-For an existing Pixi project, add Nami's package channel to `pixi.toml`:
-
-```toml
-[workspace]
-channels = [
-    "https://ameyanagi.github.io/mojo-channel",
-    # Keep your project's other channels here.
-]
-```
-
-Then add the package:
+For an existing Pixi project, add the Mojo ecosystem, Modular `max`, and
+conda-forge channels, then add Nami:
 
 ```sh
+pixi project channel add \
+  https://ameyanagi.github.io/mojo-channel \
+  https://conda.modular.com/max \
+  conda-forge
 pixi add mojo-nami
 ```
 
@@ -109,9 +104,8 @@ length or lengths.
 
 ## Window functions
 
-The first usable slice provides arbitrary-term `Float64` general-cosine windows
-plus the named window wrappers without requiring callers to work with the
-underlying coefficients:
+Nami provides arbitrary-term `Float64` general-cosine windows plus named window
+wrappers without requiring callers to work with the underlying coefficients:
 
 ```mojo
 from nami import WindowNormalization, WindowSampling, general_cosine, hann
@@ -146,8 +140,7 @@ length one returns `[1.0]`, and a negative length raises. See
 
 ## Direct convolution
 
-The next dependency-free slice provides correctness-first `Float64` linear
-convolution:
+Direct `Float64` linear convolution is correctness-first and SIMD-accelerated:
 
 ```mojo
 from nami import ConvolutionMode, convolve

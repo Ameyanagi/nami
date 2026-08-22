@@ -6,6 +6,7 @@ for test_file in tests/test_*.mojo; do
 done
 
 mkdir -p .pixi/test-bin
-mojo build -I src examples/basic.mojo -o .pixi/test-bin/basic
-mojo build -I src examples/spectral_workflow.mojo \
-  -o .pixi/test-bin/spectral_workflow
+for example in examples/*.mojo; do
+  example_name="$(basename "$example" .mojo)"
+  mojo build -I src "$example" -o ".pixi/test-bin/$example_name"
+done

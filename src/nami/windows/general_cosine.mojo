@@ -44,7 +44,12 @@ struct WindowSampling(Copyable, Equatable, ImplicitlyCopyable, Writable):
         return result^
 
     def write_to[W: Writer](self, mut writer: W):
-        writer.write("SYMMETRIC" if self == Self.SYMMETRIC else "PERIODIC")
+        if self == Self.SYMMETRIC:
+            writer.write("SYMMETRIC")
+        elif self == Self.PERIODIC:
+            writer.write("PERIODIC")
+        else:
+            writer.write("INVALID(_value=", self._value, ")")
 
 
 struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable, Writable):
@@ -87,7 +92,12 @@ struct WindowNormalization(Copyable, Equatable, ImplicitlyCopyable, Writable):
         return result^
 
     def write_to[W: Writer](self, mut writer: W):
-        writer.write("FORMULA" if self == Self.FORMULA else "PEAK")
+        if self == Self.FORMULA:
+            writer.write("FORMULA")
+        elif self == Self.PEAK:
+            writer.write("PEAK")
+        else:
+            writer.write("INVALID(_value=", self._value, ")")
 
 
 def _validate_length(length: Int, *, operation: StringLiteral) raises:
@@ -133,6 +143,8 @@ def general_cosine(
     signs when the same formula is written over a phase interval from zero to
     two pi. Zero length returns an empty list and length one returns `[1.0]`.
     """
+    sampling.validate()
+    normalization.validate()
     _validate_length(length, operation="general_cosine")
     if length == 0:
         return List[Float64]()

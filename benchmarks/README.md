@@ -50,10 +50,12 @@ development evidence, not portable performance claims. Record CPU, OS, Mojo
 version, compiler options, thermals/load, exact command, and raw output when
 comparing changes.
 
-The direct v3 comparison and its Time Profiler capture were rerun on 2026-08-22.
-The checked-in [raw result record](results/nami-analysis-v3-20260822.md) includes
-the exact UTC timestamp and commands, CPU/OS/architecture, `pmset` thermal and
-performance status, system load, unedited benchmark stdout, source hashes, and
-trace-bundle manifest plus exported-TOC hashes. This noisy, uncontrolled
-development run validates the benchmark cells and profiler workflow; it is not
-a release claim.
+The v3 harness was rerun for the 0.1.0 release candidate under the final exact
+Mojo 1.0.0 and ShuhaFFT 0.1.0 lock. The checked-in
+[raw result record](results/nami-analysis-v3-20260822.md) includes the exact UTC
+timestamp and commands, dependency versions, CPU/OS/architecture, `pmset`
+thermal and performance status, system load, unedited command stdout, commit,
+lock hash, and executable source hashes. No new Time Profiler capture was needed
+because the final run exposed no correctness change or unexplained
+representative regression. This noisy, uncontrolled run validates the release
+benchmark cells; it is not a portable performance claim.

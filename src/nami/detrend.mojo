@@ -42,7 +42,12 @@ struct DetrendKind(Copyable, Equatable, ImplicitlyCopyable, Writable):
         return result^
 
     def write_to[W: Writer](self, mut writer: W):
-        writer.write("CONSTANT" if self == Self.CONSTANT else "LINEAR")
+        if self == Self.CONSTANT:
+            writer.write("CONSTANT")
+        elif self == Self.LINEAR:
+            writer.write("LINEAR")
+        else:
+            writer.write("INVALID(_value=", self._value, ")")
 
 
 def detrend(
@@ -59,6 +64,7 @@ def detrend(
 
     The input must be non-empty and contain only finite values.
     """
+    kind.validate()
     if len(signal) == 0:
         raise Error("detrend signal must be non-empty; got signal_length=0")
 
