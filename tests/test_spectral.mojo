@@ -597,5 +597,47 @@ def test_spectrogram_validation_rejects_dimension_product_overflow() raises:
         result.validate()
 
 
+def test_extreme_finite_sample_rates_preserve_density_and_frequencies() raises:
+    var signal: List[Float64] = [0.0, 1.0, 0.0, -1.0]
+    for rate in [1.0, 1e308]:
+        var raw = periodogram(signal, rate)
+        assert_equal(raw.frequencies()[2], rate * 0.5)
+        assert_true(raw.power()[1] > 0.0)
+        assert_true(abs(raw.power()[1] * rate - 2.0) < 1e-14)
+        var averaged = welch(signal, rate, segment_length=4)
+        var frames = spectrogram(signal, rate, segment_length=4)
+        assert_equal(averaged.frequencies()[2], rate * 0.5)
+        assert_equal(frames.frequencies()[2], rate * 0.5)
+        assert_true(abs(averaged.power()[1] * rate - 4.0 / 3.0) < 1e-14)
+        assert_equal(frames.power()[1], averaged.power()[1])
+
+
+def test_tiny_rates_and_extreme_amplitudes_do_not_lose_representable_psd() raises:
+    var tiny: List[Float64] = [0.0, 1e-308, 0.0, -1e-308]
+    var tiny_result = periodogram(tiny, 1e-308)
+    assert_true(abs(tiny_result.power()[1] / 1e-308 - 2.0) < 1e-14)
+    var huge: List[Float64] = [0.0, 1e308, 0.0, -1e308]
+    var huge_result = periodogram(huge, 1.7e308)
+    assert_true(abs(huge_result.power()[1] / 1e308 - 2.0 / 1.7) < 1e-14)
+    var constant = List[Float64](length=8, fill=1e308)
+    var constant_result = welch(constant, segment_length=4)
+    for value in constant_result.power():
+        assert_equal(value, 0.0)
+    var zero = List[Float64](length=4, fill=0.0)
+    var zero_result = periodogram(zero, Float64("5e-324"))
+    assert_equal(zero_result.power()[1], 0.0)
+
+
+def test_unrepresentable_density_or_frame_time_raises() raises:
+    var signal: List[Float64] = [0.0, 1.0, 0.0, -1.0]
+    with assert_raises(contains="spectral density is outside finite Float64"):
+        _ = periodogram(signal, 1e-308)
+    with assert_raises(contains="spectral density is outside finite Float64"):
+        _ = welch(signal, 1e-309, segment_length=4)
+    var zero = List[Float64](length=4, fill=0.0)
+    with assert_raises(contains="spectrogram time[0] is outside finite Float64"):
+        _ = spectrogram(zero, 1e-308, segment_length=4)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

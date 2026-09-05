@@ -4,9 +4,12 @@ from shuhafft import FFTNormalization, RealFFTPlan
 from std.collections import List, Optional
 from std.complex import ComplexSIMD
 from std.io import Writable, Writer
+from std.math import isfinite
 
 from ..windows.general_cosine import WindowSampling, hann
 from .psd import (
+    _center_frame,
+    _density,
     _frequencies,
     _validate_fft_length,
     _validate_finite_signal,
@@ -213,7 +216,6 @@ def spectrogram(
     var window_energy = 0.0
     for index in range(segment_length):
         window_energy += window[index] * window[index]
-    var scale = 1.0 / (sample_rate * window_energy)
     var step = segment_length - actual_overlap
     var frame_count = (len(signal) - segment_length) // step + 1
     var bin_count = segment_length // 2 + 1
@@ -229,23 +231,32 @@ def spectrogram(
 
     for frame_index in range(frame_count):
         var start = frame_index * step
-        var mean = 0.0
+        var amplitude = _center_frame(signal[start : start + segment_length], frame)
         for index in range(segment_length):
-            mean += signal[start + index]
-        mean /= Float64(segment_length)
-        for index in range(segment_length):
-            frame[index] = (signal[start + index] - mean) * window[index]
+            frame[index] *= window[index]
 
         plan.forward_into(frame, spectrum)
         var power_offset = frame_index * bin_count
         for bin_index in range(bin_count):
             var value = spectrum[bin_index]
-            var density = scale * (value.re * value.re + value.im * value.im)
-            if bin_index != 0 and bin_index != bin_count - 1:
-                density *= 2.0
-            power[power_offset + bin_index] = density
+            var factor = 1.0 if bin_index == 0 or bin_index == bin_count - 1 else 2.0
+            power[power_offset + bin_index] = _density(
+                value, amplitude, sample_rate, window_energy, factor
+            )
 
-        times.append((Float64(start) + Float64(segment_length) / 2.0) / sample_rate)
+        var time = (Float64(start) + Float64(segment_length) / 2.0) / sample_rate
+        if not isfinite(time):
+            raise Error(
+                String(
+                    "spectrogram time[",
+                    frame_index,
+                    "] is outside finite Float64; got ",
+                    time,
+                    "; increase sample_rate=",
+                    sample_rate,
+                )
+            )
+        times.append(time)
 
     return Spectrogram(
         _times=times^,

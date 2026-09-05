@@ -156,3 +156,15 @@ and their arithmetic mean is differentially checked against Welch.
 Because Mojo and NumPy can synthesize the same trigonometric signal with
 different last-bit rounding, fixture comparisons use a mixed per-bin tolerance:
 absolute error no greater than `max(1e-9, 1e-9 * abs(expected))`.
+
+The implementation computes frequencies as `(k / n_fft) * sample_rate`, centers
+FFT frames in normalized sample units, and reconstructs densities from bounded
+binary mantissas and exponents. It therefore avoids intermediate overflow from
+`sample_rate * window_energy`, squared FFT magnitudes, and raw sample sums.
+Representable subnormal densities are retained; smaller densities round to zero.
+A density or spectrogram time coordinate outside finite `Float64` raises an
+error suggesting rescaling or a larger sample rate. A finite rate alone does not
+guarantee a representable density or time. Welch divides each frame contribution
+by its segment count before accumulation, so an overflowing individual frame
+need not prevent a representable average. These rules apply to all three
+estimators, including zero and near-maximum constant signals.

@@ -4,9 +4,9 @@ from shuhafft import FFTNormalization, RealFFTPlan
 from std.collections import List, Optional
 from std.complex import ComplexSIMD
 from std.io import Writable, Writer
-from std.math import isfinite
+from std.math import frexp, inf, isfinite, ldexp
 
-from ..detrend import DetrendKind, detrend
+from ..detrend import _scaled_mean
 from ..windows.general_cosine import WindowSampling, hann
 
 
@@ -129,8 +129,84 @@ def _validate_finite_signal(
 def _frequencies(n_fft: Int, sample_rate: Float64) -> List[Float64]:
     var result = List[Float64](capacity=n_fft // 2 + 1)
     for index in range(n_fft // 2 + 1):
-        result.append(Float64(index) * sample_rate / Float64(n_fft))
+        result.append((Float64(index) / Float64(n_fft)) * sample_rate)
     return result^
+
+
+def _center_frame(signal: Span[Float64, _], mut frame: List[Float64]) -> Float64:
+    """Center a validated frame in normalized units without allocating."""
+    var statistics = _scaled_mean(signal)
+    var amplitude = statistics[0]
+    var mean = statistics[1]
+    for index in range(len(signal)):
+        frame[index] = signal[index] / amplitude - mean
+    return amplitude
+
+
+def _binary_parts(value: Float64) -> Tuple[Float64, Int]:
+    """Normalize subnormals before Mojo 1.0's frexp exponent-bit operation."""
+    if value < 2.2250738585072014e-308:
+        var parts = frexp(value * 18014398509481984.0)
+        return (parts[0], Int(parts[1]) - 54)
+    var parts = frexp(value)
+    return (parts[0], Int(parts[1]))
+
+
+def _restore_exponent(mantissa: Float64, exponent: Int) -> Float64:
+    """Round once at underflow, and keep ldexp's exponent in [-1022, 1023]."""
+    var parts = _binary_parts(mantissa)
+    var normalized = parts[0]
+    var total_exponent = exponent + parts[1]
+    if total_exponent > 1024:
+        return inf[DType.float64]()
+    if total_exponent < -1074:
+        return 0.0
+    if total_exponent == 1024:
+        return ldexp(normalized, Int32(1023)) * 2.0
+    if total_exponent < -1022:
+        return ldexp(normalized, Int32(total_exponent + 1022)) * 2.2250738585072014e-308
+    return ldexp(normalized, Int32(total_exponent))
+
+
+def _density(
+    value: ComplexSIMD[DType.float64, 1],
+    amplitude: Float64,
+    sample_rate: Float64,
+    energy: Float64,
+    factor: Float64,
+) raises -> Float64:
+    """Evaluate squared amplitude / (rate * energy) using bounded mantissas."""
+    var component = max(abs(value.re), abs(value.im))
+    if component == 0.0:
+        return 0.0
+    var fft_parts = _binary_parts(component)
+    var amplitude_parts = _binary_parts(amplitude)
+    var rate_parts = _binary_parts(sample_rate)
+    var energy_parts = _binary_parts(energy)
+    var re = value.re / component
+    var im = value.im / component
+    var magnitude = fft_parts[0] * amplitude_parts[0]
+    var mantissa = (
+        magnitude
+        * magnitude
+        * (re * re + im * im)
+        / (rate_parts[0] * energy_parts[0])
+        * factor
+    )
+    var exponent = (
+        2 * (fft_parts[1] + amplitude_parts[1]) - rate_parts[1] - energy_parts[1]
+    )
+    var density = _restore_exponent(mantissa, exponent)
+    if not isfinite(density):
+        raise Error(
+            String(
+                "spectral density is outside finite Float64; got ",
+                density,
+                "; rescale the signal or increase sample_rate=",
+                sample_rate,
+            )
+        )
+    return density
 
 
 def periodogram(
@@ -150,17 +226,17 @@ def periodogram(
     _validate_fft_length(len(signal), operation="periodogram signal")
     _validate_finite_signal(signal, operation="periodogram")
 
-    var centered = detrend(signal, DetrendKind.CONSTANT)
+    var centered = List[Float64](length=len(signal), fill=0.0)
+    var amplitude = _center_frame(signal, centered)
     var plan = RealFFTPlan[DType.float64](len(signal), FFTNormalization.BACKWARD)
     var transformed = plan.forward(centered)
-    var scale = 1.0 / (sample_rate * Float64(len(signal)))
     var power = List[Float64](capacity=len(transformed))
     for index in range(len(transformed)):
         var value = transformed[index]
-        var density = scale * (value.re * value.re + value.im * value.im)
-        if index != 0 and index != len(transformed) - 1:
-            density *= 2.0
-        power.append(density)
+        var factor = 1.0 if index == 0 or index == len(transformed) - 1 else 2.0
+        power.append(
+            _density(value, amplitude, sample_rate, Float64(len(signal)), factor)
+        )
 
     var frequencies = _frequencies(len(signal), sample_rate)
     return PowerSpectrum(_frequencies=frequencies^, _power=power^)
@@ -213,7 +289,6 @@ def welch(
     var window_energy = 0.0
     for index in range(len(window)):
         window_energy += window[index] * window[index]
-    var scale = 1.0 / (sample_rate * window_energy)
     var step = segment_length - actual_overlap
     var segment_count = (len(signal) - segment_length) // step + 1
     var bin_count = segment_length // 2 + 1
@@ -226,22 +301,24 @@ def welch(
 
     for segment_index in range(segment_count):
         var start = segment_index * step
-        var mean = 0.0
+        var amplitude = _center_frame(signal[start : start + segment_length], frame)
         for index in range(segment_length):
-            mean += signal[start + index]
-        mean /= Float64(segment_length)
-        for index in range(segment_length):
-            frame[index] = (signal[start + index] - mean) * window[index]
+            frame[index] *= window[index]
         plan.forward_into(frame, spectrum)
         for index in range(bin_count):
             var value = spectrum[index]
-            accumulated[index] += scale * (value.re * value.re + value.im * value.im)
-
-    var inverse_segment_count = 1.0 / Float64(segment_count)
-    for index in range(bin_count):
-        accumulated[index] *= inverse_segment_count
-        if index != 0 and index != bin_count - 1:
-            accumulated[index] *= 2.0
+            var factor = 1.0 if index == 0 or index == bin_count - 1 else 2.0
+            accumulated[index] += _density(
+                value,
+                amplitude,
+                sample_rate,
+                window_energy,
+                factor / Float64(segment_count),
+            )
+            if not isfinite(accumulated[index]):
+                raise Error(
+                    "spectral density is outside finite Float64; rescale the signal"
+                )
 
     var frequencies = _frequencies(segment_length, sample_rate)
     return PowerSpectrum(_frequencies=frequencies^, _power=accumulated^)
