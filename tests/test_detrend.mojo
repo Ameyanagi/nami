@@ -136,6 +136,12 @@ def test_near_maximum_constants_and_cancellation_stay_finite() raises:
     assert_values_near(detrend(opposite), [0.0, 0.0])
 
 
+def test_compensated_centering_retains_small_cancellation_term() raises:
+    var signal: List[Float64] = [1e308, 1.0, -1e308]
+    var result = detrend(signal, DetrendKind.CONSTANT)
+    assert_near(result[1], 2.0 / 3.0)
+
+
 def test_extreme_linear_fit_avoids_unrepresentable_intermediate_slope() raises:
     var line: List[Float64] = [-1e308, -5e307, 0.0, 5e307, 1e308]
     assert_values_near(detrend(line), [0.0, 0.0, 0.0, 0.0, 0.0])

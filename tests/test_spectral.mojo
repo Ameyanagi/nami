@@ -623,6 +623,12 @@ def test_tiny_rates_and_extreme_amplitudes_do_not_lose_representable_psd() raise
     var constant_result = welch(constant, segment_length=4)
     for value in constant_result.power():
         assert_equal(value, 0.0)
+    var constant_frames = spectrogram(constant, segment_length=4)
+    for value in constant_frames.power():
+        assert_equal(value, 0.0)
+    var constant_periodogram = periodogram(constant)
+    for value in constant_periodogram.power():
+        assert_equal(value, 0.0)
     var zero = List[Float64](length=4, fill=0.0)
     var zero_result = periodogram(zero, Float64("5e-324"))
     assert_equal(zero_result.power()[1], 0.0)

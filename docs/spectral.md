@@ -8,7 +8,7 @@ move samples onto a uniform grid there before using this API.
 Import spectral operations explicitly:
 
 ```mojo
-from nami.spectral import PowerSpectrum, Spectrogram, periodogram, spectrogram, welch
+from nami.spectral import PowerSpectrum, SpectralWorkspace, Spectrogram, periodogram, spectrogram, welch
 ```
 
 The elementary `nami` root remains FFT-free. `nami.spectral` is the only nami
@@ -78,9 +78,9 @@ Bluestein's algorithm. Invalid non-power-of-two lengths raise an error that
 reports the supplied length and suggests the nearest lower and higher valid
 powers of two. Lengths below 2 report 2 as the smallest valid length.
 
-The operation allocates one real FFT plan and its tables, one detrended signal
-list, one compact complex FFT result, and the two result lists. It preserves the
-input.
+The operation constructs one `SpectralWorkspace` plus the two result lists.
+It preserves the input. Reuse a workspace for repeated equal-sized frames to
+amortize construction and avoid output allocation.
 
 ## `welch`
 
@@ -103,14 +103,13 @@ is
 
 Trailing samples that do not complete a segment are ignored. Each segment is
 detrended, multiplied by the periodic Hann window, transformed, density-scaled
-by `1 / (sample_rate * sum(window**2))`, and accumulated. The accumulated bins
-are divided by the number of segments, then the interior one-sided bins are
-doubled.
+by `1 / (sample_rate * sum(window**2))`, with interior one-sided bins doubled.
+Mantissas and exponents are accumulated separately and the final bins are
+materialized after averaging by the number of segments.
 
-Welch constructs one `RealFFTPlan[DType.float64]`, allocates its tables once,
-and reuses it for every segment. Its Hann window, accumulated result, real frame
-buffer, and compact complex spectrum buffer are also allocated once; the two
-work buffers are overwritten for each segment. It preserves the input.
+Welch constructs one `SpectralWorkspace` and two result lists. The plan, Hann
+window, real frame, complex spectrum, and per-bin exponents are allocated once
+and reused for every segment. It preserves the input.
 
 ## `spectrogram`
 
@@ -164,7 +163,42 @@ binary mantissas and exponents. It therefore avoids intermediate overflow from
 Representable subnormal densities are retained; smaller densities round to zero.
 A density or spectrogram time coordinate outside finite `Float64` raises an
 error suggesting rescaling or a larger sample rate. A finite rate alone does not
-guarantee a representable density or time. Welch divides each frame contribution
-by its segment count before accumulation, so an overflowing individual frame
-need not prevent a representable average. These rules apply to all three
+guarantee a representable density or time. Welch accumulates bounded mantissas with per-bin exponents and restores the
+final exponent after averaging. Thus neither an overflowing individual frame
+nor underflow of individual divided contributions prevents a representable mean. These rules apply to all three
 estimators, including zero and near-maximum constant signals.
+
+
+## Repeated analysis with `SpectralWorkspace`
+
+Construct `SpectralWorkspace(fft_size)` once and preallocate `List[Float64]`
+outputs with `workspace.bin_count()` entries. Then use:
+
+- `workspace.frequencies_into(frequencies, sample_rate=1.0)` to fill coordinates;
+- `workspace.periodogram_into(frame, power, sample_rate=1.0)` for one frame of
+  exactly `workspace.size()` samples; or
+- `workspace.welch_into(signal, power, sample_rate=1.0, overlap=None)` for any
+  signal at least `workspace.size()` samples long.
+
+The FFT size is immutable. Sample rate, signal length (Welch), and overlap can
+change between calls. Every overlap from zero through `size() - 1` is supported.
+Methods overwrite the provided list and do not resize or allocate storage. The
+workspace owns one FFT plan, the periodic Hann window, one real frame, one
+compact complex spectrum, and a per-bin integer exponent list: memory is O(n)
+and independent of the number of processed frames. Welch uses the caller's
+output list for its accumulation. The one-shot functions delegate to these same
+kernels; normalization and DC/Nyquist rules are identical.
+
+The methods require exclusive access to the workspace and output. Construct a
+separate workspace per concurrent analysis. Input/configuration errors are
+checked before changing output. A numeric overflow may leave partial output;
+discard that output and call again with rescaled inputs. The workspace remains
+usable after errors. `validate()` is an explicit invariant checkpoint; normal
+execution trusts constructed scratch storage. Equality compares FFT size and
+ignores overwritten scratch history.
+
+Run `pixi run mojo run -I src examples/spectral_workspace.mojo` for a complete
+caller-owned-buffer example. `pixi run --locked bench-spectral` separately times
+FFT plan construction, workspace construction, allocating one-shot analysis,
+and steady-state processing at FFT sizes 64 and 4096. See the committed
+[measurement](../benchmarks/results/spectral-workspace-20260905.md).
