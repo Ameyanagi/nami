@@ -59,3 +59,12 @@ lock hash, and executable source hashes. No new Time Profiler capture was needed
 because the final run exposed no correctness change or unexplained
 representative regression. This noisy, uncontrolled run validates the release
 benchmark cells; it is not a portable performance claim.
+
+
+## Reusable spectral analysis
+
+Run `pixi run --locked bench-spectral` to compare plan/workspace construction,
+one-shot periodograms and Welch estimates, and caller-owned workspace reuse at
+64 and 4096 points. Inputs, warmups, batching, and percentile computation are in
+`bench_spectral_workspace.mojo`. Results and limitations are recorded in
+[the 2026-09-05 measurement](results/spectral-workspace-20260905.md).

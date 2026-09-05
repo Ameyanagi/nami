@@ -5,6 +5,22 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Fixed-size `SpectralWorkspace` for allocation-free repeated periodogram and
+  Welch analysis into caller-owned lists, with reusable frequency output.
+- Independent DFT workspace regression tests, a complete buffer-reuse example,
+  and separate construction/steady-state performance measurements.
+
+### Fixed
+
+- Constant and linear detrending now use power-of-two scaling and expanded
+  residual numerators to avoid overflowing fits and retain small residuals after
+  nested cancellation, including adjacent maximum values and wide exponent ranges.
+- Spectral frequencies, frame centering, densities, and Welch accumulation now
+  retain representable extreme and subnormal results without intermediate
+  overflow. Unrepresentable residuals, densities, or frame times raise errors.
+
 ## [0.1.0] - 2026-08-22
 
 ### Added

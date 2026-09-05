@@ -8,6 +8,7 @@ from nami.spectral import (
 )
 from std.collections import List
 from std.math import pi, sin
+from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -595,6 +596,77 @@ def test_spectrogram_validation_rejects_dimension_product_overflow() raises:
         )
     ):
         result.validate()
+
+
+def test_extreme_finite_sample_rates_preserve_density_and_frequencies() raises:
+    var signal: List[Float64] = [0.0, 1.0, 0.0, -1.0]
+    for rate in [1.0, 1e308]:
+        var raw = periodogram(signal, rate)
+        assert_equal(raw.frequencies()[2], rate * 0.5)
+        assert_true(raw.power()[1] > 0.0)
+        assert_true(abs(raw.power()[1] * rate - 2.0) < 1e-14)
+        var averaged = welch(signal, rate, segment_length=4)
+        var frames = spectrogram(signal, rate, segment_length=4)
+        assert_equal(averaged.frequencies()[2], rate * 0.5)
+        assert_equal(frames.frequencies()[2], rate * 0.5)
+        assert_true(abs(averaged.power()[1] * rate - 4.0 / 3.0) < 1e-14)
+        assert_equal(frames.power()[1], averaged.power()[1])
+
+
+def test_tiny_rates_and_extreme_amplitudes_do_not_lose_representable_psd() raises:
+    var tiny: List[Float64] = [0.0, 1e-308, 0.0, -1e-308]
+    var tiny_result = periodogram(tiny, 1e-308)
+    assert_true(abs(tiny_result.power()[1] / 1e-308 - 2.0) < 1e-14)
+    var huge: List[Float64] = [0.0, 1e308, 0.0, -1e308]
+    var huge_result = periodogram(huge, 1.7e308)
+    assert_true(abs(huge_result.power()[1] / 1e308 - 2.0 / 1.7) < 1e-14)
+    var constant = List[Float64](length=8, fill=1e308)
+    var constant_result = welch(constant, segment_length=4)
+    for value in constant_result.power():
+        assert_equal(value, 0.0)
+    var constant_frames = spectrogram(constant, segment_length=4)
+    for value in constant_frames.power():
+        assert_equal(value, 0.0)
+    var constant_periodogram = periodogram(constant)
+    for value in constant_periodogram.power():
+        assert_equal(value, 0.0)
+    var zero = List[Float64](length=4, fill=0.0)
+    var zero_result = periodogram(zero, Float64("5e-324"))
+    assert_equal(zero_result.power()[1], 0.0)
+
+
+def test_unrepresentable_density_or_frame_time_raises() raises:
+    var signal: List[Float64] = [0.0, 1.0, 0.0, -1.0]
+    with assert_raises(contains="spectral density is outside finite Float64"):
+        _ = periodogram(signal, 1e-308)
+    with assert_raises(contains="spectral density is outside finite Float64"):
+        _ = welch(signal, 1e-309, segment_length=4)
+    var zero = List[Float64](length=4, fill=0.0)
+    with assert_raises(contains="spectrogram time[0] is outside finite Float64"):
+        _ = spectrogram(zero, 1e-308, segment_length=4)
+
+
+def test_short_welch_signal_is_rejected_before_large_workspace_allocation() raises:
+    var signal: List[Float64] = [0.0, 1.0]
+    with assert_raises(contains="signal_length=2, segment_length=1073741824"):
+        _ = welch(signal, segment_length=1 << 30)
+
+
+def test_adjacent_near_maximum_samples_keep_exact_centered_density() raises:
+    var lower = Float64(1e308)
+    var upper = bitcast[DType.float64](bitcast[DType.uint64](lower) + UInt64(1))
+    var signal: List[Float64] = [lower, upper]
+    var difference = upper - lower
+    # Operation order keeps this independent reference finite.
+    var expected = (difference / 1e308) * (difference / 2.0)
+    var raw = periodogram(signal, 1e308)
+    assert_equal(raw.power()[0], 0.0)
+    assert_true(abs(raw.power()[1] / expected - 1.0) < 1e-14)
+    var averaged = welch(signal, 1e308, segment_length=2)
+    var frames = spectrogram(signal, 1e308, segment_length=2)
+    for index in range(2):
+        assert_true(abs(averaged.power()[index] / (expected / 2.0) - 1.0) < 1e-14)
+        assert_equal(frames.power()[index], averaged.power()[index])
 
 
 def main() raises:

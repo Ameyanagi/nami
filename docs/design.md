@@ -40,6 +40,15 @@ public operation that accepts finite data never silently returns infinity or
 NaN. Its mode uses one Int discriminant rather than optional or parallel
 booleans, with `FULL`, `SAME`, and `VALID` as the public constants.
 
+Spectral analysis exposes a fixed-size `SpectralWorkspace` with caller-owned
+output and bounded scratch. One-shot convenience functions validate input before
+constructing a workspace; repeated analysis reuses its FFT plan and buffers.
+Power-of-two scaling and expanded residual numerators retain cancellation terms
+in detrending. Binary mantissa/exponent density arithmetic avoids intermediate
+overflow. Welch averages scaled accumulators before materializing
+Float64 bins. Numeric results outside finite Float64 raise; representable
+subnormal results are retained with normal rounding below that range.
+
 ## Out of scope
 
 Audio devices, codecs, media pipelines, plotting, interpolation, optimization, and a second FFT implementation are outside this package.

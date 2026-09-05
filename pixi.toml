@@ -10,6 +10,7 @@ platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 [tasks]
+bench-spectral = { cmd = "mojo build -I src -O3 benchmarks/bench_spectral_workspace.mojo -o .pixi/bench_spectral_workspace && ./.pixi/bench_spectral_workspace", description = "Measure FFT/workspace construction and reused spectral frame processing" }
 bench = { cmd = "mojo build -I src -O3 benchmarks/bench_analysis.mojo -o .pixi/bench_analysis && ./.pixi/bench_analysis", description = "Run compiled p50/p95 signal-analysis benchmarks" }
 check = { depends-on = ["format-check", "layer-check", "layer-test", "test", "precompile", "readme-check"], description = "Run the complete validation suite" }
 example = { cmd = "mojo run -I src examples/basic.mojo", description = "Run the elementary signal-processing example" }
