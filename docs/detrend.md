@@ -18,14 +18,21 @@ slope = sum((i - mean_i) * (x[i] - mean_x))
 intercept = mean_x - slope * mean_i
 ```
 
-The returned sample at index `i` is
-`x[i] - (intercept + slope * i)`. No matrix solver is used.
+The returned sample at index `i` is mathematically
+`x[i] - (intercept + slope * i)`. The implementation divides samples by their
+maximum absolute magnitude, uses compensated summation for the mean and fit,
+and centers/scales the index axis to `[-1, 1]`. It computes residuals before
+restoring the sample scale, avoiding overflowing sums, slopes, or intercepts.
+No matrix solver is used.
 
 ## Edge cases and errors
 
 - A one-sample input returns `[0.0]` for both detrend kinds.
 - An empty input raises.
 - Every input sample must be finite; NaN and infinity raise.
+- A residual larger than finite `Float64` raises an error identifying its index
+  and suggesting input rescaling. Representable subnormal residuals are allowed;
+  smaller results follow normal Float64 rounding, including underflow to zero.
 - `DetrendKind` is an Int-backed nominal value. Direct `_value` mutation is out
   of contract; `validate()` provides an explicit invariant checkpoint.
 

@@ -50,25 +50,40 @@ struct DetrendKind(Copyable, Equatable, ImplicitlyCopyable, Writable):
             writer.write("INVALID(_value=", self._value, ")")
 
 
+def _scaled_mean(signal: Span[Float64, _]) -> Tuple[Float64, Float64]:
+    """Return scale and compensated normalized mean for validated finite data."""
+    var scale = 0.0
+    for value in signal:
+        scale = max(scale, abs(value))
+    if scale == 0.0:
+        return (1.0, 0.0)
+    var total = 0.0
+    var correction = 0.0
+    for value in signal:
+        var normalized = value / scale
+        var updated = total + normalized
+        if abs(total) >= abs(normalized):
+            correction += (total - updated) + normalized
+        else:
+            correction += (normalized - updated) + total
+        total = updated
+    return (scale, (total + correction) / Float64(len(signal)))
+
+
 def detrend(
     signal: Span[Float64, _],
     kind: DetrendKind = DetrendKind.LINEAR,
 ) raises -> List[Float64]:
     """Remove a constant mean or linear least-squares trend from `signal`.
 
-    `LINEAR` fits the index axis `0 .. len(signal) - 1` with the closed-form
-    slope `sum((i - mean_i) * (x_i - mean_x)) / sum((i - mean_i)^2)` and
-    intercept `mean_x - slope * mean_i`. A singleton returns `[0.0]` for both
-    kinds. This function allocates one output `List`; the input is preserved.
-    Results match SciPy within `1e-12` on the committed fixtures.
-
-    The input must be non-empty and contain only finite values.
+    Scaled samples and a centered, normalized index axis keep the fit finite
+    when the residual is representable, including near-maximum constants.
+    Non-finite input or a residual outside finite Float64 raises. A singleton
+    returns zero. The borrowed input is preserved; one output list is allocated.
     """
     kind.validate()
     if len(signal) == 0:
         raise Error("detrend signal must be non-empty; got signal_length=0")
-
-    var mean_x = 0.0
     for index in range(len(signal)):
         if not isfinite(signal[index]):
             raise Error(
@@ -79,28 +94,44 @@ def detrend(
                     signal[index],
                 )
             )
-        mean_x += signal[index]
-    mean_x /= Float64(len(signal))
 
     var output = List[Float64](capacity=len(signal))
     if len(signal) == 1:
         output.append(0.0)
         return output^
-
-    if kind == DetrendKind.CONSTANT:
-        for index in range(len(signal)):
-            output.append(signal[index] - mean_x)
-        return output^
-
+    var statistics = _scaled_mean(signal)
+    var scale = statistics[0]
+    var mean = statistics[1]
+    var slope = 0.0
     var mean_i = Float64(len(signal) - 1) / 2.0
-    var numerator = 0.0
-    var denominator = 0.0
+    if kind == DetrendKind.LINEAR:
+        var numerator = 0.0
+        var correction = 0.0
+        var denominator = 0.0
+        for index in range(len(signal)):
+            var axis = (Float64(index) - mean_i) / mean_i
+            var term = axis * (signal[index] / scale - mean)
+            var updated = numerator + term
+            if abs(numerator) >= abs(term):
+                correction += (numerator - updated) + term
+            else:
+                correction += (term - updated) + numerator
+            numerator = updated
+            denominator += axis * axis
+        slope = (numerator + correction) / denominator
+
     for index in range(len(signal)):
-        var centered_i = Float64(index) - mean_i
-        numerator += centered_i * (signal[index] - mean_x)
-        denominator += centered_i * centered_i
-    var slope = numerator / denominator
-    var intercept = mean_x - slope * mean_i
-    for index in range(len(signal)):
-        output.append(signal[index] - (intercept + slope * Float64(index)))
+        var axis = (Float64(index) - mean_i) / mean_i
+        var residual = ((signal[index] / scale - mean) - slope * axis) * scale
+        if not isfinite(residual):
+            raise Error(
+                String(
+                    "detrend result[",
+                    index,
+                    "] is outside finite Float64; got ",
+                    residual,
+                    "; rescale the signal before detrending",
+                )
+            )
+        output.append(residual)
     return output^

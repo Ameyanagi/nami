@@ -122,5 +122,38 @@ def test_detrend_rejects_corrupted_kind_at_public_boundary() raises:
         _ = detrend(signal, kind)
 
 
+def test_near_maximum_constants_and_cancellation_stay_finite() raises:
+    for magnitude in [1e308, -1e308, Float64("1.7976931348623157e308")]:
+        var signal = List[Float64](length=8, fill=magnitude)
+        for kind in [DetrendKind.CONSTANT, DetrendKind.LINEAR]:
+            var result = detrend(signal, kind)
+            for value in result:
+                assert_equal(value, 0.0)
+    var opposite: List[Float64] = [1e308, -1e308]
+    var centered = detrend(opposite, DetrendKind.CONSTANT)
+    assert_equal(centered[0], 1e308)
+    assert_equal(centered[1], -1e308)
+    assert_values_near(detrend(opposite), [0.0, 0.0])
+
+
+def test_extreme_linear_fit_avoids_unrepresentable_intermediate_slope() raises:
+    var line: List[Float64] = [-1e308, -5e307, 0.0, 5e307, 1e308]
+    assert_values_near(detrend(line), [0.0, 0.0, 0.0, 0.0, 0.0])
+    var symmetric: List[Float64] = [1e308, -1e308, -1e308, 1e308]
+    for kind in [DetrendKind.CONSTANT, DetrendKind.LINEAR]:
+        var result = detrend(symmetric, kind)
+        for index in range(4):
+            assert_equal(result[index], symmetric[index])
+
+
+def test_mathematically_unrepresentable_detrend_residual_raises() raises:
+    var signal: List[Float64] = [1.7e308, -1.7e308, -1.7e308]
+    with assert_raises(contains="detrend result[0] is outside finite Float64"):
+        _ = detrend(signal, DetrendKind.CONSTANT)
+    var curved: List[Float64] = [-1.7e308, 1.7e308, -1.7e308]
+    with assert_raises(contains="detrend result[1] is outside finite Float64"):
+        _ = detrend(curved, DetrendKind.LINEAR)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
