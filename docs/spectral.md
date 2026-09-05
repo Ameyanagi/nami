@@ -5,6 +5,14 @@ uniformly sampled, finite `Float64` signals. Uniform spectral analysis belongs
 in nami. Non-uniform resampling and interpolation belong in nagare; callers must
 move samples onto a uniform grid there before using this API.
 
+**Availability:** `SpectralWorkspace` and the numerical fixes described here are
+unreleased current-source changes. From this source checkout, run the complete
+workspace example with:
+
+```sh
+pixi run --locked mojo run -I src examples/spectral_workspace.mojo
+```
+
 Import spectral operations explicitly:
 
 ```mojo
@@ -200,7 +208,7 @@ usable after errors. `validate()` is an explicit invariant checkpoint; normal
 execution trusts constructed scratch storage. Equality compares FFT size and
 ignores overwritten scratch history.
 
-Run `pixi run mojo run -I src examples/spectral_workspace.mojo` for a complete
+Run `pixi run --locked mojo run -I src examples/spectral_workspace.mojo` for a complete
 caller-owned-buffer example. `pixi run --locked bench-spectral` separately times
 FFT plan construction, workspace construction, allocating one-shot analysis,
 and steady-state processing at FFT sizes 64 and 4096. See the committed
