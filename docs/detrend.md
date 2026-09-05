@@ -19,11 +19,24 @@ intercept = mean_x - slope * mean_i
 ```
 
 The returned sample at index `i` is mathematically
-`x[i] - (intercept + slope * i)`. The implementation divides samples by their
-maximum absolute magnitude, uses compensated summation for the mean and fit,
-and centers/scales the index axis to `[-1, 1]`. It computes residuals before
-restoring the sample scale, avoiding overflowing sums, slopes, or intercepts.
-No matrix solver is used.
+`x[i] - (intercept + slope * i)`. The implementation scales by a power of two,
+which preserves the input significands, and retains sums in bounded floating-point
+expansions. It evaluates the residual numerator before division, so a large
+rounded mean or fitted line cannot erase a small answer through cancellation.
+For constant detrending the numerator is `N*x[i] - sum(x)`. For linear detrending,
+with `d[i] = 2*i - (N-1)`, `Sd = sum(d*x)`, and `D2 = sum(d*d)`, it evaluates
+`((N*x[i] - sum(x))*D2 - N*d[i]*Sd) / (N*D2)`. Fused multiply-add remainders
+preserve product rounding terms until the numerator is complete.
+
+When nonzero inputs span more than 512 encoded binary exponents, a single scale
+would lose tiny but representable residuals after cancellation. The implementation
+then applies the same linear operation separately to eight fixed exponent bands,
+treating other values as zero on the original index axis. It combines expanded
+residual numerators with explicit exponent tags before the common final division.
+Neither means nor individual band residuals are rounded before cancellation. Each band spans at most 307 binary exponents,
+including subnormals, and all overflow-relevant large values share the highest
+band. This retains both the tiny residual of `[1e308, -1e308, 1e-308]` and small
+perturbations hidden beneath a large mean. No matrix solver is used.
 
 ## Edge cases and errors
 
@@ -38,6 +51,9 @@ No matrix solver is used.
 
 ## Ownership and tolerance
 
-Detrending allocates one output `List[Float64]` and preserves the borrowed
-input. The implementation matches `scipy.signal.detrend` within `1e-12` on the
-committed SciPy 1.16.1 fixtures.
+Detrending allocates one output `List[Float64]` and a fixed table of at most
+eight fits, preserving the borrowed input. Each expansion uses fixed inline
+storage; there is no signal-sized allocation per band. The implementation
+matches `scipy.signal.detrend` within `1e-12` on the committed SciPy 1.16.1
+fixtures. Extreme regressions use scale-relative comparisons and exact powers
+of two, including near-maximum adjacent values and subnormal residuals.

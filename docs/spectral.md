@@ -157,8 +157,11 @@ different last-bit rounding, fixture comparisons use a mixed per-bin tolerance:
 absolute error no greater than `max(1e-9, 1e-9 * abs(expected))`.
 
 The implementation computes frequencies as `(k / n_fft) * sample_rate`, centers
-FFT frames in normalized sample units, and reconstructs densities from bounded
-binary mantissas and exponents. It therefore avoids intermediate overflow from
+FFT frames in exact power-of-two sample units, and reconstructs densities from
+bounded binary mantissas and exponents. Centering retains expanded sums through
+`N*x - sum(x)` before division, so a rounded large mean cannot distort the small
+difference between adjacent near-maximum samples. The expansion uses fixed
+inline storage and does not add heap allocation to workspace calls. It therefore avoids intermediate overflow from
 `sample_rate * window_energy`, squared FFT magnitudes, and raw sample sums.
 Representable subnormal densities are retained; smaller densities round to zero.
 A density or spectrogram time coordinate outside finite `Float64` raises an

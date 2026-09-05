@@ -14,8 +14,9 @@ and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- Constant and linear detrending now use scaled compensated arithmetic to avoid
-  overflowing means and fits for finite near-maximum signals.
+- Constant and linear detrending now use power-of-two scaling and expanded
+  residual numerators to avoid overflowing fits and retain small residuals after
+  nested cancellation, including adjacent maximum values and wide exponent ranges.
 - Spectral frequencies, frame centering, densities, and Welch accumulation now
   retain representable extreme and subnormal results without intermediate
   overflow. Unrepresentable residuals, densities, or frame times raise errors.

@@ -6,7 +6,7 @@ from std.complex import ComplexSIMD
 from std.io import Writable, Writer
 from std.math import frexp, inf, isfinite, ldexp
 
-from ..detrend import _scaled_mean
+from ..detrend import _Expansion, _power_of_two_scale
 from ..windows.general_cosine import WindowSampling, hann
 
 
@@ -137,6 +137,34 @@ def _validate_finite_signal(
             )
 
 
+def _validate_welch_segments(
+    signal: Span[Float64, _], segment_length: Int, overlap: Optional[Int]
+) raises -> Int:
+    if len(signal) < segment_length:
+        raise Error(
+            String(
+                "welch signal length must be >= segment_length; got signal_length=",
+                len(signal),
+                ", segment_length=",
+                segment_length,
+            )
+        )
+    var actual_overlap = overlap.value() if overlap else segment_length // 2
+    if actual_overlap < 0 or actual_overlap >= segment_length:
+        raise Error(
+            String(
+                (
+                    "welch overlap must satisfy 0 <= overlap < segment_length; got"
+                    " overlap="
+                ),
+                actual_overlap,
+                ", segment_length=",
+                segment_length,
+            )
+        )
+    return actual_overlap
+
+
 def _frequencies(n_fft: Int, sample_rate: Float64) -> List[Float64]:
     var result = List[Float64](capacity=n_fft // 2 + 1)
     for index in range(n_fft // 2 + 1):
@@ -146,11 +174,24 @@ def _frequencies(n_fft: Int, sample_rate: Float64) -> List[Float64]:
 
 def _center_frame(signal: Span[Float64, _], mut frame: List[Float64]) -> Float64:
     """Center a validated frame in normalized units without allocating."""
-    var statistics = _scaled_mean(signal)
-    var amplitude = statistics[0]
-    var mean = statistics[1]
+    var maximum = 0.0
+    for value in signal:
+        maximum = max(maximum, abs(value))
+    if maximum == 0.0:
+        for index in range(len(signal)):
+            frame[index] = 0.0
+        return 1.0
+    var amplitude = _power_of_two_scale(maximum)
+    var total = _Expansion()
+    for value in signal:
+        total.add(value / amplitude)
+    var length = Float64(len(signal))
     for index in range(len(signal)):
-        frame[index] = signal[index] / amplitude - mean
+        var residual = _Expansion()
+        residual.add_product(length, signal[index] / amplitude)
+        for part in range(total.count):
+            residual.add(-total.partials[part])
+        frame[index] = residual.value() / length
     return amplitude
 
 
@@ -415,28 +456,7 @@ struct SpectralWorkspace(Equatable, Movable, Writable):
         Error/output behavior matches periodogram_into().
         """
         _validate_sample_rate(sample_rate)
-        if len(signal) < self._size:
-            raise Error(
-                String(
-                    "welch signal length must be >= segment_length; got signal_length=",
-                    len(signal),
-                    ", segment_length=",
-                    self._size,
-                )
-            )
-        var actual_overlap = overlap.value() if overlap else self._size // 2
-        if actual_overlap < 0 or actual_overlap >= self._size:
-            raise Error(
-                String(
-                    (
-                        "welch overlap must satisfy 0 <= overlap < segment_length; got"
-                        " overlap="
-                    ),
-                    actual_overlap,
-                    ", segment_length=",
-                    self._size,
-                )
-            )
+        var actual_overlap = _validate_welch_segments(signal, self._size, overlap)
         self._validate_output(len(output))
         _validate_finite_signal(signal, operation="welch")
         for index in range(self.bin_count()):
@@ -491,6 +511,7 @@ def periodogram(
     """
     _validate_sample_rate(sample_rate)
     _validate_fft_length(len(signal), operation="periodogram signal")
+    _validate_finite_signal(signal, operation="periodogram")
     var workspace = SpectralWorkspace(len(signal))
     var power = List[Float64](length=workspace.bin_count(), fill=0.0)
     workspace.periodogram_into(signal, power, sample_rate)
@@ -512,6 +533,8 @@ def welch(
     """
     _validate_sample_rate(sample_rate)
     _validate_fft_length(segment_length, operation="welch segment")
+    _ = _validate_welch_segments(signal, segment_length, overlap)
+    _validate_finite_signal(signal, operation="welch")
     var workspace = SpectralWorkspace(segment_length)
     var power = List[Float64](length=workspace.bin_count(), fill=0.0)
     workspace.welch_into(signal, power, sample_rate, overlap=overlap)

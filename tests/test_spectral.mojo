@@ -8,6 +8,7 @@ from nami.spectral import (
 )
 from std.collections import List
 from std.math import pi, sin
+from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -643,6 +644,29 @@ def test_unrepresentable_density_or_frame_time_raises() raises:
     var zero = List[Float64](length=4, fill=0.0)
     with assert_raises(contains="spectrogram time[0] is outside finite Float64"):
         _ = spectrogram(zero, 1e-308, segment_length=4)
+
+
+def test_short_welch_signal_is_rejected_before_large_workspace_allocation() raises:
+    var signal: List[Float64] = [0.0, 1.0]
+    with assert_raises(contains="signal_length=2, segment_length=1073741824"):
+        _ = welch(signal, segment_length=1 << 30)
+
+
+def test_adjacent_near_maximum_samples_keep_exact_centered_density() raises:
+    var lower = Float64(1e308)
+    var upper = bitcast[DType.float64](bitcast[DType.uint64](lower) + UInt64(1))
+    var signal: List[Float64] = [lower, upper]
+    var difference = upper - lower
+    # Operation order keeps this independent reference finite.
+    var expected = (difference / 1e308) * (difference / 2.0)
+    var raw = periodogram(signal, 1e308)
+    assert_equal(raw.power()[0], 0.0)
+    assert_true(abs(raw.power()[1] / expected - 1.0) < 1e-14)
+    var averaged = welch(signal, 1e308, segment_length=2)
+    var frames = spectrogram(signal, 1e308, segment_length=2)
+    for index in range(2):
+        assert_true(abs(averaged.power()[index] / (expected / 2.0) - 1.0) < 1e-14)
+        assert_equal(frames.power()[index], averaged.power()[index])
 
 
 def main() raises:
